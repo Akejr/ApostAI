@@ -3,11 +3,7 @@
   "version": "1.0.0",
   "private": true,
   "scripts": {
-    "build": "cd project && npm install && npm run build",
-    "dev": "cd project && npm run dev",
-    "install": "cd project && npm install"
-  },
-  "workspaces": [
-    "project"
-  ]
+    "build": "cd project && npm run build",
+    "dev": "cd project && npm run dev"
+  }
 }
