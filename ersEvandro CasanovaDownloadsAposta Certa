@@ -1,0 +1,5 @@
+[33m48dcf2e[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m, [m[1;31morigin/main[m[33m)[m  DEPLOY COMPLETO: ApostAI - Sistema Profissional de Análise Esportiva
+[33mf53a1f9[m  Fix: Package.json correto na raiz para Vercel
+[33m49f0d19[m  Fix: Reestruturação para deploy - arquivos movidos para raiz
+[33ma240593[m  Fix: Correção estrutura para Vercel
+[33mf93a40f[m  Fix: Configuração para deploy no Vercel
