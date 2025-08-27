@@ -1,5 +1,6 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { Search, TrendingUp, Users, Target, User, ChevronRight, Calendar, MapPin, ArrowLeft, BarChart3, Clock, TrendingDown, AlertTriangle, CheckCircle, Home, ChevronLeft } from 'lucide-react';
+import logo from './assets/logo.png';
 
 // Interfaces expandidas para suportar novos dados
 interface Team {
@@ -3142,7 +3143,7 @@ function App() {
               onClick={handleBackToHome}
             >
               <img 
-                src="/src/assets/logo.png" 
+                src={logo} 
                 alt="ApostAI Logo" 
                 className="h-8 sm:h-10 lg:h-12 w-auto"
                 onError={(e) => {
