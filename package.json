@@ -4,8 +4,7 @@
   "private": true,
   "scripts": {
     "build": "cd project && npm run build",
-    "dev": "cd project && npm run dev",
-    "install": "cd project && npm install"
+    "dev": "cd project && npm run dev"
   },
   "workspaces": [
     "project"
