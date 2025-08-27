@@ -372,7 +372,7 @@ function App() {
   const [totalBetsGenerated, setTotalBetsGenerated] = useState(0);
   const [showSearchInterface, setShowSearchInterface] = useState(false);
 
-  const [usedBetIds, setUsedBetIds] = useState<Set<string>>(new Set());
+
 
   // Estados para swipe em mobile
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -3338,25 +3338,17 @@ function App() {
         gameAnalysis.awayStats || null
       );
       
-      // Usar todas as apostas disponíveis (todos os níveis de risco)
+      // SEMPRE gerar todas as apostas disponíveis (sem filtro de "usadas")
       const availableBets = allBetSuggestions;
       
-      // Filtrar apostas ainda não usadas
-      const unusedBets = availableBets.filter(bet => !usedBetIds.has(bet.id));
-      
-      // Se todas foram usadas, resetar e usar todas novamente
-      const finalBets = unusedBets.length > 0 ? unusedBets : availableBets;
-      if (unusedBets.length === 0) {
-        setUsedBetIds(new Set());
-      }
-      
-      // Usar todas as apostas disponíveis em vez de apenas uma
-      if (finalBets.length > 0) {
-        // Marcar todas como usadas
-        setUsedBetIds(prev => new Set([...prev, ...finalBets.map(bet => bet.id)]));
-        setGameAnalysis(prev => prev ? { ...prev, betSuggestions: finalBets } : null);
+      if (availableBets.length > 0) {
+        setGameAnalysis(prev => prev ? { ...prev, betSuggestions: availableBets } : null);
         setCurrentBetIndex(0); // Resetar para primeira aposta
-        setTotalBetsGenerated(finalBets.length); // Definir total de apostas
+        setTotalBetsGenerated(availableBets.length); // Definir total de apostas
+        
+        console.log(`✅ Geradas ${availableBets.length} apostas para ${selectedFixture.teams.home.name} vs ${selectedFixture.teams.away.name}`);
+      } else {
+        console.log('⚠️ Nenhuma aposta foi gerada - critérios muito rigorosos');
       }
       
     } catch (error) {
@@ -3365,7 +3357,7 @@ function App() {
     } finally {
       setGeneratingBets(false);
     }
-  }, [selectedFixture, gameAnalysis, generateBetSuggestions, getTeamLastMatches, analyzeRecentForm, usedBetIds]);
+  }, [selectedFixture, gameAnalysis, generateBetSuggestions, getTeamLastMatches, analyzeRecentForm]);
 
   // Funções de navegação entre apostas
   const handlePreviousBet = useCallback(() => {
@@ -3466,7 +3458,7 @@ function App() {
     setTeams([]);
     setShowResults(false);
     setSearchStep('teams');
-    setUsedBetIds(new Set());
+
     setCurrentBetIndex(0);
     setTotalBetsGenerated(0);
     setShowSearchInterface(false);
@@ -4322,83 +4314,7 @@ function App() {
                       </div>
                     </div>
 
-                    {/* NOVA SEÇÃO: Análise de Força Estrutural */}
-                    {gameAnalysis.structuralAnalysis && (
-                      <div className="mt-6 sm:mt-8">
-                        <h3 className="text-lg sm:text-xl font-bold mb-3 sm:mb-4 text-[#FF3002] flex items-center">
-                          <span className="mr-2">🏗️</span>
-                          Força Estrutural & Nível de Competição
-                        </h3>
-                        <div className="space-y-3 sm:space-y-4">
-                          {/* Resumo da Análise Estrutural */}
-                          <div className="bg-gradient-to-r from-orange-900/20 to-red-900/20 border border-orange-500/30 rounded-lg p-4">
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                              {/* Time da Casa */}
-                              <div className="space-y-2">
-                                <h4 className="font-semibold text-orange-400 text-sm">🏠 {gameAnalysis.structuralAnalysis.homeTeam.totalFFS.toFixed(0)}pts - {selectedFixture?.teams.home.name}</h4>
-                                <div className="text-xs text-white/70 space-y-1">
-                                  <div>• Liga: +{gameAnalysis.structuralAnalysis.homeTeam.leagueWeight}pts</div>
-                                  <div>• Prestígio: +{gameAnalysis.structuralAnalysis.homeTeam.prestige}pts</div>
-                                  <div>• Adversários: +{gameAnalysis.structuralAnalysis.homeTeam.opponentQuality.toFixed(1)}pts</div>
-                                  <div>• Resultados: {gameAnalysis.structuralAnalysis.homeTeam.resultAdjustment > 0 ? '+' : ''}{gameAnalysis.structuralAnalysis.homeTeam.resultAdjustment.toFixed(1)}pts</div>
-                                  <div>• Elenco: +{gameAnalysis.structuralAnalysis.homeTeam.squadStrength}pts</div>
-                                  <div>• Contexto: {gameAnalysis.structuralAnalysis.homeTeam.contextBonus > 0 ? '+' : ''}{gameAnalysis.structuralAnalysis.homeTeam.contextBonus}pts</div>
-                                </div>
-                              </div>
-                              
-                              {/* Time Visitante */}
-                              <div className="space-y-2">
-                                <h4 className="font-semibold text-orange-400 text-sm">✈️ {gameAnalysis.structuralAnalysis.awayTeam.totalFFS.toFixed(0)}pts - {selectedFixture?.teams.away.name}</h4>
-                                <div className="text-xs text-white/70 space-y-1">
-                                  <div>• Liga: +{gameAnalysis.structuralAnalysis.awayTeam.leagueWeight}pts</div>
-                                  <div>• Prestígio: +{gameAnalysis.structuralAnalysis.awayTeam.prestige}pts</div>
-                                  <div>• Adversários: +{gameAnalysis.structuralAnalysis.awayTeam.opponentQuality.toFixed(1)}pts</div>
-                                  <div>• Resultados: {gameAnalysis.structuralAnalysis.awayTeam.resultAdjustment > 0 ? '+' : ''}{gameAnalysis.structuralAnalysis.awayTeam.resultAdjustment.toFixed(1)}pts</div>
-                                  <div>• Elenco: +{gameAnalysis.structuralAnalysis.awayTeam.squadStrength}pts</div>
-                                  <div>• Contexto: {gameAnalysis.structuralAnalysis.awayTeam.contextBonus > 0 ? '+' : ''}{gameAnalysis.structuralAnalysis.awayTeam.contextBonus}pts</div>
-                                </div>
-                              </div>
-                            </div>
-                            
-                            {/* Diferença Estrutural */}
-                            <div className="mt-4 pt-3 border-t border-orange-500/20">
-                              <div className="flex items-center justify-between">
-                                <span className="text-sm font-medium text-white">
-                                  Diferença Estrutural: <span className="text-orange-400 font-bold">{Math.abs(gameAnalysis.structuralAnalysis.comparison.difference).toFixed(0)}pts</span>
-                                </span>
-                                <span className={`px-2 py-1 rounded text-xs font-medium ${
-                                  gameAnalysis.structuralAnalysis.comparison.structuralAdvantage === 'home' 
-                                    ? 'bg-green-900/50 text-green-300 border border-green-500/30'
-                                    : gameAnalysis.structuralAnalysis.comparison.structuralAdvantage === 'away'
-                                    ? 'bg-blue-900/50 text-blue-300 border border-blue-500/30'
-                                    : 'bg-yellow-900/50 text-yellow-300 border border-yellow-500/30'
-                                }`}>
-                                  {gameAnalysis.structuralAnalysis.comparison.structuralAdvantage === 'home' 
-                                    ? '🏠 Casa Superior'
-                                    : gameAnalysis.structuralAnalysis.comparison.structuralAdvantage === 'away'
-                                    ? '✈️ Visitante Superior'
-                                    : '⚖️ Equilibrado'
-                                  }
-                                </span>
-                              </div>
-                              <div className="mt-2 text-xs text-white/60">
-                                Confiança: {gameAnalysis.structuralAnalysis.comparison.confidence.toFixed(0)}%
-                              </div>
-                            </div>
-                          </div>
 
-                          {/* Insights Detalhados da Análise Estrutural */}
-                          <div className="space-y-2">
-                            {gameAnalysis.structuralAnalysis.comparison.insights.map((insight, index) => (
-                              <div key={index} className="flex items-start space-x-2 p-2 sm:p-3 bg-black/50 border border-orange-500/20 rounded-lg">
-                                <span className="text-orange-400 text-sm mt-0.5">🏗️</span>
-                                <span className="text-sm text-white/90">{insight}</span>
-                              </div>
-                            ))}
-                          </div>
-                        </div>
-                      </div>
-                    )}
                  </div>
                </div>
               </div>
