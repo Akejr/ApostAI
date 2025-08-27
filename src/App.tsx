@@ -397,7 +397,16 @@ function App() {
       ]);
 
       // NOVO: Análise de Força Estrutural & Nível de Competição
+      console.log('🔍 INICIANDO ANÁLISE ESTRUTURAL COMPLETA...');
       const structuralAnalysis = await analyzeStructuralStrength(fixture, homeLastMatches, awayLastMatches);
+      console.log('🔍 RESULTADO DA ANÁLISE ESTRUTURAL:', {
+        homeFFS: structuralAnalysis.homeTeam.totalFFS,
+        awayFFS: structuralAnalysis.awayTeam.totalFFS,
+        difference: structuralAnalysis.comparison.difference,
+        advantage: structuralAnalysis.comparison.structuralAdvantage,
+        homeLeague: fixture.league.name,
+        awayLeague: fixture.league.name
+      });
 
       // Inicializar variáveis base
       let homeScore = 50;
@@ -498,13 +507,29 @@ function App() {
       const structuralDifference = structuralAnalysis.comparison.difference;
       const structuralAdvantage = structuralAnalysis.comparison.structuralAdvantage;
       
-      // Aplicar bônus estrutural baseado na diferença
+      // CORREÇÃO: Aplicar bônus estrutural MUITO MAIOR para garantir que a diferença de divisão seja respeitada
       if (structuralAdvantage === 'home') {
-        const structuralBonus = Math.min(25, Math.abs(structuralDifference) * 0.3);
+        // Para diferenças grandes (times de divisões muito diferentes), aplicar bônus maior
+        let structuralBonus;
+        if (Math.abs(structuralDifference) > 100) {
+          structuralBonus = Math.min(60, Math.abs(structuralDifference) * 0.5); // Bônus muito maior para diferenças extremas
+        } else if (Math.abs(structuralDifference) > 50) {
+          structuralBonus = Math.min(40, Math.abs(structuralDifference) * 0.4); // Bônus maior para diferenças grandes
+        } else {
+          structuralBonus = Math.min(25, Math.abs(structuralDifference) * 0.3); // Bônus normal
+        }
         homeScore += structuralBonus;
         insights.push(`🏗️ ${fixture.teams.home.name} tem vantagem estrutural de ${Math.abs(structuralDifference).toFixed(0)}pts (+${structuralBonus.toFixed(1)} bônus)`);
       } else if (structuralAdvantage === 'away') {
-        const structuralBonus = Math.min(20, Math.abs(structuralDifference) * 0.25);
+        // Para visitante, bônus menor mas ainda significativo
+        let structuralBonus;
+        if (Math.abs(structuralDifference) > 100) {
+          structuralBonus = Math.min(45, Math.abs(structuralDifference) * 0.35);
+        } else if (Math.abs(structuralDifference) > 50) {
+          structuralBonus = Math.min(30, Math.abs(structuralDifference) * 0.3);
+        } else {
+          structuralBonus = Math.min(20, Math.abs(structuralDifference) * 0.25);
+        }
         awayScore += structuralBonus;
         insights.push(`🏗️ ${fixture.teams.away.name} tem vantagem estrutural de ${Math.abs(structuralDifference).toFixed(0)}pts (+${structuralBonus.toFixed(1)} bônus)`);
       } else {
@@ -556,25 +581,61 @@ function App() {
       }
 
       // ===== ANÁLISE MELHORADA DA FORMA ATUAL =====
-      // Dar peso muito maior para a forma recente atual
+      // CORREÇÃO: Reduzir o peso da forma recente quando há grande diferença estrutural
       if (homeForm.winRate !== undefined) {
-        const homeFormBonus = homeForm.winRate > 70 ? 25 : 
-                             homeForm.winRate > 60 ? 18 : 
-                             homeForm.winRate > 50 ? 10 : 
-                             homeForm.winRate > 40 ? 5 : 
-                             homeForm.winRate < 20 ? -15 : -5;
+        let homeFormBonus;
+        
+        // Se há grande diferença estrutural, reduzir o impacto da forma recente
+        if (Math.abs(structuralDifference) > 100) {
+          homeFormBonus = homeForm.winRate > 70 ? 15 : 
+                         homeForm.winRate > 60 ? 10 : 
+                         homeForm.winRate > 50 ? 5 : 
+                         homeForm.winRate > 40 ? 2 : 
+                         homeForm.winRate < 20 ? -8 : -3;
+        } else if (Math.abs(structuralDifference) > 50) {
+          homeFormBonus = homeForm.winRate > 70 ? 20 : 
+                         homeForm.winRate > 60 ? 15 : 
+                         homeForm.winRate > 50 ? 8 : 
+                         homeForm.winRate > 40 ? 3 : 
+                         homeForm.winRate < 20 ? -12 : -5;
+        } else {
+          homeFormBonus = homeForm.winRate > 70 ? 25 : 
+                         homeForm.winRate > 60 ? 18 : 
+                         homeForm.winRate > 50 ? 10 : 
+                         homeForm.winRate > 40 ? 5 : 
+                         homeForm.winRate < 20 ? -15 : -5;
+        }
+        
         homeScore += homeFormBonus;
         
         // Insight movido para os 4 principais
       }
 
       if (awayForm.winRate !== undefined) {
-        // Visitante precisa de forma ainda melhor para compensar desvantagem
-        const awayFormBonus = awayForm.winRate > 75 ? 20 : 
-                             awayForm.winRate > 65 ? 15 : 
-                             awayForm.winRate > 55 ? 8 : 
-                             awayForm.winRate > 40 ? 3 : 
-                             awayForm.winRate < 25 ? -12 : -8;
+        // CORREÇÃO: Reduzir o peso da forma recente quando há grande diferença estrutural
+        let awayFormBonus;
+        
+        // Se há grande diferença estrutural, reduzir ainda mais o impacto da forma recente para visitante
+        if (Math.abs(structuralDifference) > 100) {
+          awayFormBonus = awayForm.winRate > 75 ? 12 : 
+                         awayForm.winRate > 65 ? 8 : 
+                         awayForm.winRate > 55 ? 4 : 
+                         awayForm.winRate > 40 ? 1 : 
+                         awayForm.winRate < 25 ? -6 : -4;
+        } else if (Math.abs(structuralDifference) > 50) {
+          awayFormBonus = awayForm.winRate > 75 ? 15 : 
+                         awayForm.winRate > 65 ? 12 : 
+                         awayForm.winRate > 55 ? 6 : 
+                         awayForm.winRate > 40 ? 2 : 
+                         awayForm.winRate < 25 ? -10 : -6;
+        } else {
+          awayFormBonus = awayForm.winRate > 75 ? 20 : 
+                         awayForm.winRate > 65 ? 15 : 
+                         awayForm.winRate > 55 ? 8 : 
+                         awayForm.winRate > 40 ? 3 : 
+                         awayForm.winRate < 25 ? -12 : -8;
+        }
+        
         awayScore += awayFormBonus;
         
         // Insight movido para os 4 principais
@@ -945,9 +1006,23 @@ function App() {
       }
 
       // ===== CÁLCULOS FINAIS =====
-      // Mando de campo (mantido)
-      homeScore += 12;
-      contextInsights.push(`Vantagem do mando de campo é decisiva para ${fixture.teams.home.name}`);
+      // CORREÇÃO: Mando de campo ajustado baseado na diferença estrutural
+      let homefieldBonus;
+      if (Math.abs(structuralDifference) > 100) {
+        // Para diferenças muito grandes, mando de campo tem peso menor
+        homefieldBonus = 5;
+        contextInsights.push(`Mando de campo reduzido devido à grande diferença estrutural`);
+      } else if (Math.abs(structuralDifference) > 50) {
+        // Para diferenças grandes, mando de campo moderado
+        homefieldBonus = 8;
+        contextInsights.push(`Mando de campo moderado devido à diferença estrutural`);
+      } else {
+        // Para diferenças pequenas, mando de campo normal
+        homefieldBonus = 12;
+        contextInsights.push(`Vantagem do mando de campo é decisiva para ${fixture.teams.home.name}`);
+      }
+      
+      homeScore += homefieldBonus;
 
       // H2H (mantido e expandido)
       if (h2hData && h2hData.length > 0) {
@@ -973,11 +1048,14 @@ function App() {
         const avgGoalsH2H = totalGoalsH2H / recentH2H.length;
         const bothScoredRate = bothScoredCount / recentH2H.length;
 
+        // CORREÇÃO: H2H ajustado baseado na diferença estrutural
         if (homeWinsH2H >= 3) {
-          homeScore += 8;
+          const h2hBonus = Math.abs(structuralDifference) > 100 ? 3 : Math.abs(structuralDifference) > 50 ? 5 : 8;
+          homeScore += h2hBonus;
           h2hInsights.push(`${fixture.teams.home.name} domina o confronto direto`);
         } else if (homeWinsH2H <= 1) {
-          awayScore += 6;
+          const h2hBonus = Math.abs(structuralDifference) > 100 ? 2 : Math.abs(structuralDifference) > 50 ? 3 : 6;
+          awayScore += h2hBonus;
           h2hInsights.push(`${fixture.teams.away.name} tem vantagem no histórico recente`);
         } else {
           h2hInsights.push(`Confronto equilibrado nos últimos jogos`);
@@ -1018,10 +1096,105 @@ function App() {
         contextInsights.push(`Jogo diurno com condições ideais de disputa`);
       }
 
-      // Ajustes finais
-      const totalScore = homeScore + awayScore;
-      homeScore = (homeScore / totalScore) * 100;
-      awayScore = (awayScore / totalScore) * 100;
+      // ===== CÁLCULO FINAL: 60% FORÇA ESTRUTURAL + 40% ANÁLISE TRADICIONAL =====
+      console.log('🧮 Iniciando cálculo final com nova lógica 60/40');
+      
+      // 1. CALCULAR SCORE TRADICIONAL (Forma, H2H, Mando, etc.) - 40% do peso
+      const totalTraditionalScore = homeScore + awayScore;
+      const traditionalHomePercent = (homeScore / totalTraditionalScore) * 100;
+      const traditionalAwayPercent = (awayScore / totalTraditionalScore) * 100;
+      
+      console.log('📊 Score Tradicional:', {
+        home: traditionalHomePercent.toFixed(1) + '%',
+        away: traditionalAwayPercent.toFixed(1) + '%',
+        baseScores: { home: homeScore, away: awayScore }
+      });
+      
+      // 2. CALCULAR SCORE ESTRUTURAL PURO - 60% do peso
+      let structuralHomePercent, structuralAwayPercent;
+      
+      // Aplicar lógica estrutural baseada na diferença de FFS
+      const absDifference = Math.abs(structuralDifference);
+      
+      if (absDifference > 150) {
+        // Diferença EXTREMA (Ex: Premier League vs League Two)
+        if (structuralAdvantage === 'home') {
+          structuralHomePercent = 85;
+          structuralAwayPercent = 15;
+        } else if (structuralAdvantage === 'away') {
+          structuralHomePercent = 15;
+          structuralAwayPercent = 85;
+        } else {
+          structuralHomePercent = 50;
+          structuralAwayPercent = 50;
+        }
+      } else if (absDifference > 100) {
+        // Diferença MUITO GRANDE (Ex: Serie A vs Serie C)
+        if (structuralAdvantage === 'home') {
+          structuralHomePercent = 78;
+          structuralAwayPercent = 22;
+        } else if (structuralAdvantage === 'away') {
+          structuralHomePercent = 22;
+          structuralAwayPercent = 78;
+        } else {
+          structuralHomePercent = 50;
+          structuralAwayPercent = 50;
+        }
+      } else if (absDifference > 50) {
+        // Diferença GRANDE (Ex: Premier League vs Championship)
+        if (structuralAdvantage === 'home') {
+          structuralHomePercent = 68;
+          structuralAwayPercent = 32;
+        } else if (structuralAdvantage === 'away') {
+          structuralHomePercent = 32;
+          structuralAwayPercent = 68;
+        } else {
+          structuralHomePercent = 50;
+          structuralAwayPercent = 50;
+        }
+      } else if (absDifference > 20) {
+        // Diferença MODERADA
+        const ratio = absDifference / 100; // 0.2 a 0.5
+        const bonus = ratio * 20; // 4 a 10 pontos
+        if (structuralAdvantage === 'home') {
+          structuralHomePercent = 50 + bonus;
+          structuralAwayPercent = 50 - bonus;
+        } else if (structuralAdvantage === 'away') {
+          structuralHomePercent = 50 - bonus;
+          structuralAwayPercent = 50 + bonus;
+        } else {
+          structuralHomePercent = 50;
+          structuralAwayPercent = 50;
+        }
+      } else {
+        // Diferença PEQUENA - equilíbrio estrutural
+        structuralHomePercent = 50;
+        structuralAwayPercent = 50;
+      }
+      
+      console.log('🏗️ Score Estrutural:', {
+        home: structuralHomePercent.toFixed(1) + '%',
+        away: structuralAwayPercent.toFixed(1) + '%',
+        difference: structuralDifference.toFixed(1),
+        advantage: structuralAdvantage
+      });
+      
+      // 3. COMBINAR SCORES: 60% Estrutural + 40% Tradicional
+      const finalHomePercent = (structuralHomePercent * 0.60) + (traditionalHomePercent * 0.40);
+      const finalAwayPercent = (structuralAwayPercent * 0.60) + (traditionalAwayPercent * 0.40);
+      
+      // 4. APLICAR SCORES FINAIS
+      homeScore = finalHomePercent;
+      awayScore = finalAwayPercent;
+      
+      console.log('⚖️ Score Final (60% Estrutural + 40% Tradicional):', {
+        home: homeScore.toFixed(1) + '%',
+        away: awayScore.toFixed(1) + '%',
+        calculation: `(${structuralHomePercent.toFixed(1)} × 0.6) + (${traditionalHomePercent.toFixed(1)} × 0.4) = ${homeScore.toFixed(1)}%`
+      });
+
+      // Adicionar insight informativo sobre a nova lógica
+      insights.push(`⚖️ Análise: ${structuralHomePercent.toFixed(1)}% vs ${structuralAwayPercent.toFixed(1)}% (estrutural) + ${traditionalHomePercent.toFixed(1)}% vs ${traditionalAwayPercent.toFixed(1)}% (tradicional)`);
 
       // Limitar valores
       totalGoalsExpected = Math.max(1.5, Math.min(4.5, totalGoalsExpected));
@@ -1658,11 +1831,16 @@ function App() {
 
     // ===== 3. RESULTADO =====
     
-    // Casa vence
+    // Casa vence - CORREÇÃO: Respeitar análise estrutural
     if (analysis.homeTeamScore > analysis.awayTeamScore + 15) {
       const homeWinRate = homeForm.winRate || 0;
-      if (homeWinRate > 50) {
-        const confidence = 82;
+      // Verificar se há vantagem estrutural significativa
+      const hasStructuralAdvantage = analysis.structuralAnalysis && 
+        analysis.structuralAnalysis.comparison.structuralAdvantage === 'home' &&
+        Math.abs(analysis.structuralAnalysis.comparison.difference) > 30;
+      
+      if (homeWinRate > 50 || hasStructuralAdvantage) {
+        const confidence = hasStructuralAdvantage ? 85 : 82;
         const teamStrength = calculateTeamStrength(homeForm, awayForm, analysis);
         
         // Buscar odd real para vitória do time da casa
@@ -1673,31 +1851,45 @@ function App() {
           type: 'resultado',
           market: 'Resultado final',
           selection: `Vitória ${homeName}`,
-          reasoning: `${homeName} é favorito com ${analysis.homeTeamScore.toFixed(0)}% de probabilidade`,
+          reasoning: hasStructuralAdvantage ? 
+            `${homeName} é favorito estruturalmente com ${analysis.homeTeamScore.toFixed(0)}% de probabilidade` :
+            `${homeName} é favorito com ${analysis.homeTeamScore.toFixed(0)}% de probabilidade`,
           confidence,
           realOdd: oddInfo?.odd,
           bookmaker: oddInfo?.bookmaker,
           riskLevel: oddInfo ? classifyRiskByOdds(oddInfo.odd) : classifyRisk(confidence, teamStrength),
-          criteria: ['Mando de campo', 'Boa forma', 'Superioridade técnica']
+          criteria: hasStructuralAdvantage ? 
+            ['Vantagem estrutural', 'Mando de campo', 'Superioridade técnica'] :
+            ['Mando de campo', 'Boa forma', 'Superioridade técnica']
         });
       }
     }
 
-    // Visitante vence
+    // Visitante vence - CORREÇÃO: Respeitar análise estrutural
     if (analysis.awayTeamScore > analysis.homeTeamScore + 10) {
       const awayWinRate = awayForm.winRate || 0;
-      if (awayWinRate > 60) {
-        const confidence = 75;
+      // Verificar se há vantagem estrutural significativa para o visitante
+      const hasStructuralAdvantage = analysis.structuralAnalysis && 
+        analysis.structuralAnalysis.comparison.structuralAdvantage === 'away' &&
+        Math.abs(analysis.structuralAnalysis.comparison.difference) > 30;
+      
+      // SÓ apostar no visitante se ele tiver forma excepcional OU vantagem estrutural
+      if (awayWinRate > 70 || hasStructuralAdvantage) {
+        const confidence = hasStructuralAdvantage ? 80 : 75;
         const teamStrength = calculateTeamStrength(homeForm, awayForm, analysis);
         suggestions.push({
           id: `bet-${suggestionId++}`,
           type: 'resultado',
           market: 'Resultado final',
           selection: `Vitória ${awayName}`,
-          reasoning: `${awayName} em excelente fase (${awayWinRate.toFixed(0)}% de vitórias)`,
+          reasoning: hasStructuralAdvantage ? 
+            `${awayName} tem vantagem estrutural e está em boa fase (${awayWinRate.toFixed(0)}% de vitórias)` :
+            `${awayName} em excelente fase (${awayWinRate.toFixed(0)}% de vitórias)`,
           confidence,
           riskLevel: classifyRisk(confidence, teamStrength),
-          criteria: ['Forma excepcional', 'Visitante forte', 'Casa em má fase']
+          criteria: hasStructuralAdvantage ? 
+            ['Vantagem estrutural', 'Forma excepcional', 'Visitante forte'] :
+            ['Forma excepcional', 'Visitante forte', 'Casa em má fase']
         });
       }
     }
@@ -2582,6 +2774,13 @@ function App() {
       const leagueNameLower = leagueName.toLowerCase();
       const countryLower = country.toLowerCase();
       
+      console.log('🏆 DEBUG Liga:', { 
+        original: leagueName, 
+        country, 
+        lower: leagueNameLower,
+        countryLower 
+      });
+      
       // Top 5 europeus
       const top5Leagues = ['premier league', 'la liga', 'bundesliga', 'serie a', 'ligue 1'];
       const top5Countries = ['england', 'spain', 'germany', 'italy', 'france'];
@@ -2589,30 +2788,55 @@ function App() {
       // Primeira divisão nacional
       if (top5Leagues.some(league => leagueNameLower.includes(league)) || 
           top5Countries.some(country => countryLower.includes(country))) {
+        console.log('✅ TOP 5 DETECTADO → 120 pontos');
         return 120; // +100 base + 20 extras para top 5
       }
       
-      // Outras primeiras divisões
-      if (leagueNameLower.includes('league') || leagueNameLower.includes('liga') || 
-          leagueNameLower.includes('premier') || leagueNameLower.includes('division')) {
-        return 100;
+      // EFL League Two (4ª divisão inglesa) - PRIORIDADE MÁXIMA
+      if (leagueNameLower.includes('league two')) {
+        console.log('✅ LEAGUE TWO DETECTADA → 30 pontos (4ª divisão)');
+        return 30;
       }
       
-      // Segunda divisão
-      if (leagueNameLower.includes('championship') || leagueNameLower.includes('segunda') ||
-          leagueNameLower.includes('2.') || leagueNameLower.includes('second')) {
-        return 70;
-      }
-      
-      // Terceira divisão
-      if (leagueNameLower.includes('league one') || leagueNameLower.includes('tercera') ||
-          leagueNameLower.includes('3.') || leagueNameLower.includes('third')) {
+      // EFL League One (3ª divisão inglesa)
+      if (leagueNameLower.includes('league one')) {
+        console.log('✅ LEAGUE ONE DETECTADA → 50 pontos (3ª divisão)');
         return 50;
       }
       
-      // Quarta divisão ou inferior
-      if (leagueNameLower.includes('league two') || leagueNameLower.includes('cuarta') ||
-          leagueNameLower.includes('4.') || leagueNameLower.includes('fourth')) {
+      // Championship (2ª divisão inglesa)
+      if (leagueNameLower.includes('championship')) {
+        console.log('✅ CHAMPIONSHIP DETECTADA → 70 pontos (2ª divisão)');
+        return 70;
+      }
+      
+      // Premier League (1ª divisão inglesa)
+      if (leagueNameLower.includes('premier league')) {
+        console.log('✅ PREMIER LEAGUE DETECTADA → 120 pontos (1ª divisão top)');
+        return 120;
+      }
+      
+      // Outras primeiras divisões
+      if (leagueNameLower.includes('liga') || leagueNameLower.includes('division')) {
+        console.log('✅ PRIMEIRA DIVISÃO GERAL → 100 pontos');
+        return 100;
+      }
+      
+      // Segunda divisão geral
+      if (leagueNameLower.includes('segunda') || leagueNameLower.includes('second')) {
+        console.log('✅ SEGUNDA DIVISÃO GERAL → 70 pontos');
+        return 70;
+      }
+      
+      // Terceira divisão geral
+      if (leagueNameLower.includes('tercera') || leagueNameLower.includes('third')) {
+        console.log('✅ TERCEIRA DIVISÃO GERAL → 50 pontos');
+        return 50;
+      }
+      
+      // Quarta divisão geral
+      if (leagueNameLower.includes('cuarta') || leagueNameLower.includes('fourth')) {
+        console.log('✅ QUARTA DIVISÃO GERAL → 30 pontos');
         return 30;
       }
       
@@ -2622,14 +2846,94 @@ function App() {
         return 80; // -20 pontos para ligas fracas
       }
       
+      console.log('⚠️ LIGA NÃO IDENTIFICADA → 90 pontos (padrão)');
       return 90; // Padrão para ligas médias
     };
 
-    const homeLeagueWeight = getLeagueWeight(fixture.league.name, fixture.league.country);
-    const awayLeagueWeight = getLeagueWeight(fixture.league.name, fixture.league.country);
+    // ❗ CORREÇÃO CRÍTICA: Buscar ligas individuais dos times
+    // Para Copa/Torneios, times podem ser de ligas diferentes!
     
-    insights.push(`${fixture.teams.home.name}: ${homeLeagueWeight}pts (${fixture.league.name})`);
-    insights.push(`${fixture.teams.away.name}: ${awayLeagueWeight}pts (${fixture.league.name})`);
+    let homeLeagueWeight, awayLeagueWeight;
+    let homeLeagueInfo, awayLeagueInfo;
+    
+    try {
+      // Buscar informações das ligas principais dos times
+      const [homeTeamInfo, awayTeamInfo] = await Promise.all([
+        fetch(`https://v3.football.api-sports.io/teams?id=${fixture.teams.home.id}`, {
+          headers: { 'X-RapidAPI-Key': API_KEY }
+        }).then(r => r.json()),
+        fetch(`https://v3.football.api-sports.io/teams?id=${fixture.teams.away.id}`, {
+          headers: { 'X-RapidAPI-Key': API_KEY }
+        }).then(r => r.json())
+      ]);
+      
+      // Se conseguiu buscar info dos times, usar sua liga principal
+      if (homeTeamInfo.response?.[0]) {
+        homeLeagueInfo = homeTeamInfo.response[0].venue?.city || fixture.league.country;
+        // Para times ingleses, detectar divisão pela cidade/região
+        if (fixture.league.country.toLowerCase().includes('england')) {
+          // Buscar ultima temporada do time para determinar sua divisão atual
+          const homeSeasonResponse = await fetch(`https://v3.football.api-sports.io/leagues?team=${fixture.teams.home.id}&current=true`, {
+            headers: { 'X-RapidAPI-Key': API_KEY }
+          }).then(r => r.json());
+          
+          if (homeSeasonResponse.response?.[0]) {
+            const homeCurrentLeague = homeSeasonResponse.response[0].league.name;
+            homeLeagueWeight = getLeagueWeight(homeCurrentLeague, fixture.league.country);
+            homeLeagueInfo = homeCurrentLeague;
+          } else {
+            homeLeagueWeight = getLeagueWeight(fixture.league.name, fixture.league.country);
+            homeLeagueInfo = fixture.league.name;
+          }
+        } else {
+          homeLeagueWeight = getLeagueWeight(fixture.league.name, fixture.league.country);
+          homeLeagueInfo = fixture.league.name;
+        }
+      } else {
+        homeLeagueWeight = getLeagueWeight(fixture.league.name, fixture.league.country);
+        homeLeagueInfo = fixture.league.name;
+      }
+      
+      if (awayTeamInfo.response?.[0]) {
+        awayLeagueInfo = awayTeamInfo.response[0].venue?.city || fixture.league.country;
+        // Para times ingleses, detectar divisão pela cidade/região
+        if (fixture.league.country.toLowerCase().includes('england')) {
+          const awaySeasonResponse = await fetch(`https://v3.football.api-sports.io/leagues?team=${fixture.teams.away.id}&current=true`, {
+            headers: { 'X-RapidAPI-Key': API_KEY }
+          }).then(r => r.json());
+          
+          if (awaySeasonResponse.response?.[0]) {
+            const awayCurrentLeague = awaySeasonResponse.response[0].league.name;
+            awayLeagueWeight = getLeagueWeight(awayCurrentLeague, fixture.league.country);
+            awayLeagueInfo = awayCurrentLeague;
+          } else {
+            awayLeagueWeight = getLeagueWeight(fixture.league.name, fixture.league.country);
+            awayLeagueInfo = fixture.league.name;
+          }
+        } else {
+          awayLeagueWeight = getLeagueWeight(fixture.league.name, fixture.league.country);
+          awayLeagueInfo = fixture.league.name;
+        }
+      } else {
+        awayLeagueWeight = getLeagueWeight(fixture.league.name, fixture.league.country);
+        awayLeagueInfo = fixture.league.name;
+      }
+      
+    } catch (error) {
+      console.log('⚠️ Erro ao buscar ligas dos times, usando liga do fixture');
+      homeLeagueWeight = getLeagueWeight(fixture.league.name, fixture.league.country);
+      awayLeagueWeight = getLeagueWeight(fixture.league.name, fixture.league.country);
+      homeLeagueInfo = fixture.league.name;
+      awayLeagueInfo = fixture.league.name;
+    }
+    
+    console.log('🏆 PESOS DAS LIGAS CALCULADOS:', {
+      home: { team: fixture.teams.home.name, league: homeLeagueInfo, weight: homeLeagueWeight },
+      away: { team: fixture.teams.away.name, league: awayLeagueInfo, weight: awayLeagueWeight }
+    });
+    
+    insights.push(`${fixture.teams.home.name}: ${homeLeagueWeight}pts (${homeLeagueInfo})`);
+    insights.push(`${fixture.teams.away.name}: ${awayLeagueWeight}pts (${awayLeagueInfo})`);
 
     // ===== 2. AJUSTE POR HISTÓRICO E PRESTÍGIO =====
     const getClubPrestige = (teamName: string): number => {
