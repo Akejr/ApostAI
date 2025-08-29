@@ -162,3 +162,40 @@ input:focus {
 .animate-chart-pulse {
   animation: chartPulse 3s ease-in-out infinite;
 }
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Scroll personalizado para os resultados da pesquisa */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #FF3002, #FF6B47);
+  border-radius: 10px;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #E02702, #FF3002);
+}
+
+/* Fallback para Firefox */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #FF3002 rgba(255, 255, 255, 0.05);
+}

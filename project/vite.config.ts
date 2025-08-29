@@ -17,6 +17,9 @@ export default defineConfig({
       interval: 1000 // Reduz frequência de verificação
     }
   },
+  preview: {
+    port: 4173
+  },
   build: {
     outDir: 'dist',
     sourcemap: false,

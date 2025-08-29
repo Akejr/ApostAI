@@ -3834,9 +3834,6 @@ function App() {
               <a href="#" className="text-white hover:text-[#FF3002] transition-colors duration-300 font-medium text-sm lg:text-base">
                 Sobre
               </a>
-              <a href="#" className="text-white hover:text-[#FF3002] transition-colors duration-300 font-medium text-sm lg:text-base">
-                Com.
-              </a>
             </nav>
 
             <div className="flex items-center space-x-2 sm:space-x-4">

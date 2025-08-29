@@ -1,6 +1,11 @@
 import React, { useState, useCallback, useEffect } from 'react';
-import { Search, TrendingUp, Users, Target, User, ChevronRight, Calendar, MapPin, ArrowLeft, BarChart3, Clock, TrendingDown, AlertTriangle, CheckCircle, Home, ChevronLeft } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { createPlanPayment, openCheckout } from './lib/payment';
+import SuccessPage from './components/SuccessPage';
+import { Search, TrendingUp, Users, Target, User, ChevronRight, Calendar, MapPin, ArrowLeft, BarChart3, Clock, TrendingDown, AlertTriangle, CheckCircle, Home, ChevronLeft, Menu, X } from 'lucide-react';
 import logo from './assets/logo.png';
+import Admin from './Admin';
+import { supabase } from './lib/supabase';
 
 // Interfaces expandidas para suportar novos dados
 interface Team {
@@ -356,6 +361,49 @@ interface StructuralStrengthAnalysis {
 }
 
 function App() {
+  // Verificar rotas especiais
+  const isAdminRoute = window.location.pathname === '/admin';
+  const isAnalyzeRoute = window.location.pathname === '/analisar';
+  
+  // Verificar se estamos na rota de sucesso
+  const isSuccessRoute = window.location.pathname === '/sucesso';
+
+  // Se estamos na rota do admin, renderizar o componente Admin
+  if (isAdminRoute) {
+    return <Admin />;
+  }
+
+  // Se estamos na rota de sucesso, renderizar a página de sucesso
+  if (isSuccessRoute) {
+    return <SuccessPage />;
+  }
+
+  // Verificar se usuário está logado para rota protegida
+  const checkUserAuth = () => {
+    const savedAuth = localStorage.getItem('userAuth');
+    if (savedAuth) {
+      const authData = JSON.parse(savedAuth);
+      if (Date.now() - authData.timestamp < 24 * 60 * 60 * 1000) {
+        return authData.user;
+      } else {
+        localStorage.removeItem('userAuth');
+      }
+    }
+    return null;
+  };
+
+  // Se estamos na rota de análise, verificar autenticação
+  if (isAnalyzeRoute) {
+    const authenticatedUser = checkUserAuth();
+    if (!authenticatedUser) {
+      // Redirecionar para home se não estiver logado
+      window.location.href = '/';
+      return null;
+    }
+  }
+
+
+
   const [searchTerm, setSearchTerm] = useState('');
   const [teams, setTeams] = useState<TeamSearchResult[]>([]);
   const [selectedTeam, setSelectedTeam] = useState<Team | null>(null);
@@ -369,8 +417,162 @@ function App() {
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [generatingBets, setGeneratingBets] = useState(false);
   const [currentBetIndex, setCurrentBetIndex] = useState(0);
+  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  // Estados para autenticação de usuários
+  const [isUserLoggedIn, setIsUserLoggedIn] = useState(() => {
+    const user = checkUserAuth();
+    return !!user;
+  });
+  const [currentUser, setCurrentUser] = useState<any>(() => {
+    return checkUserAuth();
+  });
+  const [showLoginModal, setShowLoginModal] = useState(false);
+  const [loginCode, setLoginCode] = useState('');
+  const [loginError, setLoginError] = useState('');
+  const [showUserMenu, setShowUserMenu] = useState(false);
+
+  // Função para verificar código de usuário
+  const handleUserLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!loginCode.trim()) return;
+
+    try {
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('code', loginCode.trim())
+        .eq('status', 'active')
+        .single();
+
+      if (error || !data) {
+        setLoginError('Código inválido ou usuário inativo');
+        return;
+      }
+
+      // Verificar se o usuário ainda tem créditos (exceto Premium)
+      if (data.plan !== 'Premium' && data.credits <= 0) {
+        setLoginError('Créditos esgotados. Entre em contato para renovar.');
+        return;
+      }
+
+      // Login bem-sucedido
+      setIsUserLoggedIn(true);
+      setCurrentUser(data);
+      setShowLoginModal(false);
+      setLoginCode('');
+      setLoginError('');
+      
+      // Salvar no localStorage
+      localStorage.setItem('userAuth', JSON.stringify({
+        user: data,
+        timestamp: Date.now()
+      }));
+
+      // Redirecionar para análise se não estamos já lá
+      if (window.location.pathname !== '/analisar') {
+        window.location.href = '/analisar';
+      } else {
+        setShowSearchInterface(true);
+      }
+    } catch (error) {
+      console.error('Erro no login:', error);
+      setLoginError('Erro ao verificar código. Tente novamente.');
+    }
+  };
+
+  const handleUserLogout = () => {
+    setIsUserLoggedIn(false);
+    setCurrentUser(null);
+    setShowUserMenu(false);
+    localStorage.removeItem('userAuth');
+    
+    // Redirecionar para home após logout
+    window.location.href = '/';
+  };
+
+  const handlePlanPayment = (planName: string, planPrice: number) => {
+    // Criar link de pagamento para o plano selecionado
+    const { orderId, paymentUrl } = createPlanPayment(planName, planPrice);
+    
+    // Salvar informações do pedido no localStorage para verificação posterior
+    localStorage.setItem('currentOrder', JSON.stringify({
+      orderId,
+      planName,
+      planPrice,
+      timestamp: Date.now()
+    }));
+    
+    // Abrir checkout da InfinitePay
+    openCheckout(paymentUrl);
+  };
+
+  // Verificar se usuário já está logado
+  useEffect(() => {
+    const savedAuth = localStorage.getItem('userAuth');
+    if (savedAuth) {
+      const authData = JSON.parse(savedAuth);
+      if (Date.now() - authData.timestamp < 24 * 60 * 60 * 1000) {
+        setIsUserLoggedIn(true);
+        setCurrentUser(authData.user);
+        
+        // Se usuário está logado e na rota de análise, mostrar a interface de busca
+        if (isAnalyzeRoute) {
+          console.log('✅ Usuário logado na rota de análise, mostrando interface de busca');
+          setShowSearchInterface(true);
+        }
+      } else {
+        localStorage.removeItem('userAuth');
+        // Se o token expirou e estamos na rota de análise, redirecionar para home
+        if (isAnalyzeRoute) {
+          window.location.href = '/';
+        }
+      }
+    } else {
+      // Se não há autenticação e estamos na rota de análise, redirecionar para home
+      if (isAnalyzeRoute) {
+        window.location.href = '/';
+      }
+    }
+  }, [isAnalyzeRoute]);
+
+
+
+  // Fechar menu do usuário quando clicar fora
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (!target.closest('.user-menu-container')) {
+        setShowUserMenu(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Função para fechar o menu mobile
+  const closeMobileMenu = () => {
+    setIsMobileMenuOpen(false);
+  };
+
+  // Função para scroll suave para seções
+  const scrollToSection = (sectionId: string) => {
+    const element = document.getElementById(sectionId);
+    if (element) {
+      element.scrollIntoView({
+        behavior: 'smooth',
+        block: 'start'
+      });
+    }
+    // Fecha o menu mobile se estiver aberto
+    setIsMobileMenuOpen(false);
+  };
   const [totalBetsGenerated, setTotalBetsGenerated] = useState(0);
-  const [showSearchInterface, setShowSearchInterface] = useState(false);
+  const [showSearchInterface, setShowSearchInterface] = useState(() => {
+    // Se estamos na rota de análise, mostrar interface de busca
+    return window.location.pathname === '/analisar';
+  });
 
 
 
@@ -3447,25 +3649,31 @@ function App() {
 
 
 
-  // Função para voltar ao início
+  // Função para voltar ao início ou navegar baseado no login
   const handleBackToHome = useCallback(() => {
-    setShowAnalysis(false);
-    setSelectedFixture(null);
-    setGameAnalysis(null);
-    setSearchTerm('');
-    setSelectedTeam(null);
-    setFixtures([]);
-    setTeams([]);
-    setShowResults(false);
-    setSearchStep('teams');
+    if (isUserLoggedIn) {
+      // Se usuário logado, ir para /analisar
+      window.location.href = '/analisar';
+    } else {
+      // Se não logado, voltar para home
+      setShowAnalysis(false);
+      setSelectedFixture(null);
+      setGameAnalysis(null);
+      setSearchTerm('');
+      setSelectedTeam(null);
+      setFixtures([]);
+      setTeams([]);
+      setShowResults(false);
+      setSearchStep('teams');
 
-    setCurrentBetIndex(0);
-    setTotalBetsGenerated(0);
-    setShowSearchInterface(false);
-    
-    // Scroll para o topo
-    window.scrollTo({ top: 0, behavior: 'smooth' });
-  }, []);
+      setCurrentBetIndex(0);
+      setTotalBetsGenerated(0);
+      setShowSearchInterface(false);
+      
+      // Scroll para o topo
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+  }, [isUserLoggedIn]);
 
   // Função para buscar times
   const searchTeams = useCallback(async (teamName: string) => {
@@ -3633,46 +3841,50 @@ function App() {
     if (searchStep === 'teams' && teams.length > 0) {
       return (
         <div className="p-4">
-          <h3 className="text-lg font-semibold mb-4 text-[#FF3002]">
+          <h3 className="text-lg font-semibold mb-4 text-[#FF3002] border-b border-white/10 pb-2">
             Times Encontrados ({teams.length})
           </h3>
-          <div className="space-y-3">
+          <div className="space-y-2">
             {teams.map((teamData) => (
               <div 
                 key={teamData.team.id}
                 onClick={() => handleTeamSelect(teamData.team)}
-                className="bg-[#2a2a2a] rounded-lg p-4 hover:bg-[#3a3a3a] transition-colors duration-300 cursor-pointer border border-transparent hover:border-[#FF3002]/30"
+                className="bg-white/5 backdrop-blur-sm rounded-xl p-4 hover:bg-white/10 hover:shadow-lg hover:shadow-[#FF3002]/20 transition-all duration-300 cursor-pointer border border-white/10 hover:border-[#FF3002]/50 group"
               >
                 <div className="flex items-center justify-between">
                   <div className="flex items-center space-x-4">
-                    <img 
-                      src={teamData.team.logo} 
-                      alt={teamData.team.name}
-                      className="w-10 h-10"
-                      onError={(e) => {
-                        e.currentTarget.style.display = 'none';
-                      }}
-                    />
-                    <div>
-                      <h4 className="font-semibold text-white">{teamData.team.name}</h4>
-                      <div className="flex items-center space-x-2 text-sm text-gray-400">
-                        <span>{teamData.team.country}</span>
+                    <div className="relative">
+                      <img 
+                        src={teamData.team.logo} 
+                        alt={teamData.team.name}
+                        className="w-12 h-12 rounded-lg object-cover"
+                        onError={(e) => {
+                          e.currentTarget.style.display = 'none';
+                        }}
+                      />
+                      <div className="absolute -bottom-1 -right-1 w-4 h-4 bg-[#FF3002] rounded-full flex items-center justify-center">
+                        <svg className="w-2 h-2 text-white" fill="currentColor" viewBox="0 0 20 20">
+                          <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    </div>
+                    <div className="flex-1">
+                      <h4 className="font-bold text-white group-hover:text-[#FF3002] transition-colors text-lg">{teamData.team.name}</h4>
+                      <div className="flex items-center space-x-2 text-sm text-gray-400 mt-1">
+                        <span className="bg-white/10 px-2 py-1 rounded-full text-xs">{teamData.team.country}</span>
                         {teamData.team.founded && (
-                          <>
-                            <span>•</span>
-                            <span>Fundado em {teamData.team.founded}</span>
-                          </>
+                          <span className="text-xs">• Est. {teamData.team.founded}</span>
                         )}
                         {teamData.team.national && (
-                          <>
-                            <span>•</span>
-                            <span className="text-[#FF3002]">Seleção Nacional</span>
-                          </>
+                          <span className="text-[#FF3002] text-xs font-medium">🏆 Nacional</span>
                         )}
                       </div>
                     </div>
                   </div>
-                  <ChevronRight className="w-5 h-5 text-gray-400" />
+                  <div className="flex items-center space-x-2">
+                    <span className="text-xs text-gray-400 hidden sm:block">Clique para analisar</span>
+                    <ChevronRight className="w-5 h-5 text-gray-400 group-hover:text-[#FF3002] transition-colors" />
+                  </div>
                 </div>
               </div>
             ))}
@@ -3684,10 +3896,10 @@ function App() {
     if (searchStep === 'fixtures' && selectedTeam) {
       return (
         <div className="p-4">
-          <div className="flex items-center mb-4">
+          <div className="flex items-center mb-4 pb-3 border-b border-white/10">
             <button 
               onClick={handleBackToTeams}
-              className="mr-3 p-1 hover:bg-[#3a3a3a] rounded-lg transition-colors"
+              className="mr-3 p-2 hover:bg-white/10 rounded-xl transition-all duration-300 hover:scale-110"
             >
               <ArrowLeft className="w-5 h-5 text-[#FF3002]" />
             </button>
@@ -3695,14 +3907,17 @@ function App() {
               <img 
                 src={selectedTeam.logo} 
                 alt={selectedTeam.name}
-                className="w-8 h-8"
+                className="w-10 h-10 rounded-lg"
                 onError={(e) => {
                   e.currentTarget.style.display = 'none';
                 }}
               />
-              <h3 className="text-lg font-semibold text-[#FF3002]">
-                Próximos Jogos - {selectedTeam.name}
-              </h3>
+              <div>
+                <h3 className="text-lg font-bold text-[#FF3002]">
+                  Próximos Jogos
+                </h3>
+                <p className="text-sm text-gray-400">{selectedTeam.name}</p>
+              </div>
             </div>
           </div>
           
@@ -3816,32 +4031,250 @@ function App() {
               />
             </div>
 
-            <nav className="hidden md:flex items-center space-x-4 lg:space-x-8">
-              <a href="#" className="text-white hover:text-[#FF3002] transition-colors duration-300 font-medium text-sm lg:text-base">
-                Funcionalidades
-              </a>
-              <a href="#" className="text-white hover:text-[#FF3002] transition-colors duration-300 font-medium text-sm lg:text-base">
-                Planos
-              </a>
-              <a href="#" className="text-white hover:text-[#FF3002] transition-colors duration-300 font-medium text-sm lg:text-base">
-                Sobre
-              </a>
-              <a href="#" className="text-white hover:text-[#FF3002] transition-colors duration-300 font-medium text-sm lg:text-base">
-                Com.
+            {/* Menu Desktop - Ocultar para usuários logados */}
+            {!isUserLoggedIn && (
+              <nav className="hidden lg:flex items-center space-x-6">
+              <button 
+                onClick={() => scrollToSection('funcionalidades')}
+                className="text-white hover:text-[#FF3002] transition-all duration-300 font-semibold text-base lg:text-lg px-3 py-2 rounded-xl hover:bg-white/10 hover:shadow-lg hover:shadow-[#FF3002]/20 relative group cursor-pointer"
+              >
+                <span className="relative z-10">Funcionalidades</span>
+                <div className="absolute inset-0 bg-gradient-to-r from-[#FF3002]/0 to-[#FF3002]/0 group-hover:from-[#FF3002]/10 group-hover:to-[#FF3002]/5 rounded-xl transition-all duration-300"></div>
+              </button>
+              <button 
+                onClick={() => scrollToSection('planos')}
+                className="text-white hover:text-[#FF3002] transition-all duration-300 font-semibold text-base lg:text-lg px-3 py-2 rounded-xl hover:bg-white/10 hover:shadow-lg hover:shadow-[#FF3002]/20 relative group cursor-pointer"
+              >
+                <span className="relative z-10">Planos</span>
+                <div className="absolute inset-0 bg-gradient-to-r from-[#FF3002]/0 to-[#FF3002]/0 group-hover:from-[#FF3002]/10 group-hover:to-[#FF3002]/5 rounded-xl transition-all duration-300"></div>
+              </button>
+              <a href="#" className="text-white hover:text-[#FF3002] transition-all duration-300 font-semibold text-base lg:text-lg px-3 py-2 rounded-xl hover:bg-white/10 hover:shadow-lg hover:shadow-[#FF3002]/20 relative group">
+                <span className="relative z-10">Sobre</span>
+                <div className="absolute inset-0 bg-gradient-to-r from-[#FF3002]/0 to-[#FF3002]/0 group-hover:from-[#FF3002]/10 group-hover:to-[#FF3002]/5 rounded-xl transition-all duration-300"></div>
               </a>
             </nav>
+            )}
+
+            {/* Botão Menu Mobile - Ocultar para usuários logados */}
+            {!isUserLoggedIn && (
+              <button
+                onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
+                className="lg:hidden p-2 rounded-lg hover:bg-white/10 transition-all duration-300"
+              >
+              {isMobileMenuOpen ? (
+                <X className="w-6 h-6 text-white" />
+              ) : (
+                <Menu className="w-6 h-6 text-white" />
+              )}
+            </button>
+            )}
 
             <div className="flex items-center space-x-2 sm:space-x-4">
-                <button 
-                onClick={() => setShowSearchInterface(true)}
-                className="bg-[#FF3002] hover:bg-[#E02702] text-white px-3 sm:px-4 lg:px-6 py-2 sm:py-3 rounded-xl lg:rounded-2xl font-bold text-sm sm:text-base transition-all duration-300 hover:shadow-lg hover:shadow-[#FF3002]/20 transform hover:scale-105"
-              >
-                Começar agora
-            </button>
+              {isUserLoggedIn ? (
+                <div className="relative user-menu-container">
+                  <button
+                    onClick={() => setShowUserMenu(!showUserMenu)}
+                    className="flex items-center space-x-3 bg-gradient-to-r from-[#FF3002]/20 to-[#FF6B47]/20 hover:from-[#FF3002]/30 hover:to-[#FF6B47]/30 backdrop-blur-xl border border-[#FF3002]/30 text-white px-4 py-2.5 rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-[#FF3002]/20 group"
+                  >
+                    <div className="relative">
+                      {/* Avatar com gradiente */}
+                      <div className="w-8 h-8 bg-gradient-to-br from-[#FF3002] to-[#FF6B47] rounded-lg flex items-center justify-center group-hover:scale-110 transition-transform duration-300">
+                        <span className="text-white font-bold text-sm">
+                          {currentUser?.name?.charAt(0)?.toUpperCase() || 'U'}
+                        </span>
+                      </div>
+                      {/* Status indicator */}
+                      <div className="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-black animate-pulse"></div>
+                    </div>
+                    <div className="text-left">
+                      <span className="text-sm font-semibold block">
+                        {currentUser?.name?.split(' ')[0] || 'Usuário'}
+                      </span>
+                      <span className="text-xs text-gray-300 block">
+                        {currentUser?.plan}
+                      </span>
+                    </div>
+                    <div className="text-[#FF3002] group-hover:rotate-180 transition-transform duration-300">
+                      <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+                      </svg>
+                    </div>
+                  </button>
+                  
+                  {showUserMenu && (
+                    <div className="absolute right-0 top-full mt-3 w-72 bg-black/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden">
+                      {/* Header do menu */}
+                      <div className="bg-gradient-to-r from-[#FF3002]/10 to-[#FF6B47]/10 p-4 border-b border-white/10">
+                        <div className="flex items-center space-x-3">
+                          <div className="w-12 h-12 bg-gradient-to-br from-[#FF3002] to-[#FF6B47] rounded-xl flex items-center justify-center">
+                            <span className="text-white font-bold text-lg">
+                              {currentUser?.name?.charAt(0)?.toUpperCase() || 'U'}
+                            </span>
+                          </div>
+                          <div>
+                            <p className="text-white font-bold text-lg">{currentUser?.name}</p>
+                            <div className="flex items-center space-x-2">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                                currentUser?.plan === 'Premium' 
+                                  ? 'bg-purple-500/20 text-purple-400'
+                                  : currentUser?.plan === 'Pro'
+                                  ? 'bg-[#FF3002]/20 text-[#FF3002]'
+                                  : 'bg-blue-500/20 text-blue-400'
+                              }`}>
+                                {currentUser?.plan}
+                              </span>
+                              <span className="w-2 h-2 bg-green-400 rounded-full animate-pulse"></span>
+                              <span className="text-xs text-green-400">Online</span>
+                            </div>
+                          </div>
+                        </div>
+                      </div>
+                      
+                      {/* Conteúdo do menu */}
+                      <div className="p-4 space-y-4">
+                        {/* Créditos */}
+                        <div className="bg-white/5 rounded-xl p-3">
+                          <div className="flex items-center justify-between mb-2">
+                            <span className="text-gray-300 text-sm">Créditos disponíveis</span>
+                            <svg className="w-4 h-4 text-[#FF3002]" fill="currentColor" viewBox="0 0 20 20">
+                              <path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+                            </svg>
+                          </div>
+                          <p className="text-white font-bold text-xl">
+                            {currentUser?.plan === 'Premium' ? (
+                              <span className="text-purple-400">∞ Ilimitados</span>
+                            ) : (
+                              <span className="text-[#FF3002]">{currentUser?.credits} análises</span>
+                            )}
+                          </p>
+                        </div>
+
+                        {/* Estatísticas rápidas */}
+                        <div className="grid grid-cols-2 gap-3">
+                          <div className="bg-white/5 rounded-lg p-3 text-center">
+                            <p className="text-gray-400 text-xs">Análises feitas</p>
+                            <p className="text-white font-bold">{currentUser?.analyses || 0}</p>
+                          </div>
+                          <div className="bg-white/5 rounded-lg p-3 text-center">
+                            <p className="text-gray-400 text-xs">Plano ativo</p>
+                            <p className="text-[#FF3002] font-bold text-sm">{currentUser?.plan}</p>
+                          </div>
+                        </div>
+
+                        {/* Botão de logout */}
+                        <button
+                          onClick={handleUserLogout}
+                          className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 hover:scale-105 flex items-center justify-center space-x-2"
+                        >
+                          <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                          </svg>
+                          <span>Sair da conta</span>
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </div>
+              ) : (
+                <button
+                  onClick={() => setShowLoginModal(true)}
+                  className="bg-white/10 hover:bg-white/20 text-white px-3 py-2 rounded-lg font-medium transition-all duration-300"
+                >
+                  Login
+                </button>
+                             )}
+               {!isUserLoggedIn && (
+                 <button 
+                   onClick={() => scrollToSection('planos')}
+                   className="hidden sm:block bg-[#FF3002] hover:bg-[#E02702] text-white px-3 sm:px-4 lg:px-6 py-2 sm:py-3 rounded-xl lg:rounded-2xl font-bold text-sm sm:text-base transition-all duration-300 hover:shadow-lg hover:shadow-[#FF3002]/20 transform hover:scale-105"
+                 >
+                   Começar agora
+                </button>
+               )}
             </div>
           </div>
         </div>
       </header>
+
+      {/* Menu Mobile Overlay */}
+      {isMobileMenuOpen && (
+                <div className="lg:hidden fixed inset-0 z-50 bg-black/80 backdrop-blur-sm" onClick={closeMobileMenu}>
+          <div className="absolute top-0 right-0 w-80 h-full bg-black/95 border-l border-white/10 shadow-2xl transform transition-transform duration-300 ease-in-out" onClick={(e) => e.stopPropagation()}>
+            <div className="p-6">
+              {/* Header do Menu Mobile */}
+              <div className="flex items-center justify-between mb-8">
+                <div className="flex items-center space-x-3">
+                  <img 
+                    src={logo} 
+                    alt="ApostAI Logo" 
+                    className="h-8 w-auto"
+                    onError={(e) => {
+                      e.currentTarget.style.display = 'none';
+                    }}
+                  />
+                  <span className="text-white font-bold text-lg">Menu</span>
+                </div>
+                <button
+                  onClick={() => setIsMobileMenuOpen(false)}
+                  className="p-2 rounded-lg hover:bg-white/10 transition-all duration-300"
+                >
+                  <X className="w-6 h-6 text-white" />
+                </button>
+              </div>
+
+              {/* Links do Menu Mobile */}
+              <nav className="space-y-4">
+                <button 
+                  onClick={() => scrollToSection('funcionalidades')}
+                  className="w-full text-left text-white hover:text-[#FF3002] transition-all duration-300 font-semibold text-lg py-3 px-4 rounded-xl hover:bg-white/10 hover:shadow-lg hover:shadow-[#FF3002]/20 relative group cursor-pointer"
+                >
+                  <span className="relative z-10 flex items-center space-x-3">
+                    <Target className="w-5 h-5" />
+                    <span>Funcionalidades</span>
+                  </span>
+                  <div className="absolute inset-0 bg-gradient-to-r from-[#FF3002]/0 to-[#FF3002]/0 group-hover:from-[#FF3002]/10 group-hover:to-[#FF3002]/5 rounded-xl transition-all duration-300"></div>
+                </button>
+                
+                <button 
+                  onClick={() => scrollToSection('planos')}
+                  className="w-full text-left text-white hover:text-[#FF3002] transition-all duration-300 font-semibold text-lg py-3 px-4 rounded-xl hover:bg-white/10 hover:shadow-lg hover:shadow-[#FF3002]/20 relative group cursor-pointer"
+                >
+                  <span className="relative z-10 flex items-center space-x-3">
+                    <TrendingUp className="w-5 h-5" />
+                    <span>Planos</span>
+                  </span>
+                  <div className="absolute inset-0 bg-gradient-to-r from-[#FF3002]/0 to-[#FF3002]/0 group-hover:from-[#FF3002]/10 group-hover:to-[#FF3002]/5 rounded-xl transition-all duration-300"></div>
+                </button>
+                
+                <a 
+                  href="#" 
+                  className="block text-white hover:text-[#FF3002] transition-all duration-300 font-semibold text-lg py-3 px-4 rounded-xl hover:bg-white/10 hover:shadow-lg hover:shadow-[#FF3002]/20 relative group"
+                  onClick={() => setIsMobileMenuOpen(false)}
+                >
+                  <span className="relative z-10 flex items-center space-x-3">
+                    <User className="w-5 h-5" />
+                    <span>Sobre</span>
+                  </span>
+                  <div className="absolute inset-0 bg-gradient-to-r from-[#FF3002]/0 to-[#FF3002]/0 group-hover:from-[#FF3002]/10 group-hover:to-[#FF3002]/5 rounded-xl transition-all duration-300"></div>
+                </a>
+              </nav>
+
+              {/* Botão Começar Agora no Menu Mobile */}
+              <div className="mt-8 pt-6 border-t border-white/10">
+                <button 
+                  onClick={() => {
+                    scrollToSection('planos');
+                    setIsMobileMenuOpen(false);
+                  }}
+                  className="w-full bg-gradient-to-r from-[#FF3002] to-[#FF6B47] hover:from-[#E02702] hover:to-[#FF3002] text-white px-6 py-4 rounded-xl font-bold text-lg transition-all duration-300 hover:shadow-xl hover:shadow-[#FF3002]/30 transform hover:scale-105 border border-[#FF3002]/20"
+                >
+                  Começar agora
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Home Hero Section */}
       {!showAnalysis && !showSearchInterface && (
@@ -3867,7 +4300,7 @@ function App() {
               </div>
 
               <button 
-                onClick={() => setShowSearchInterface(true)}
+                onClick={() => scrollToSection('planos')}
                 className="bg-[#FF3002] hover:bg-[#E02702] text-white px-6 sm:px-8 py-3 sm:py-4 rounded-xl lg:rounded-2xl font-bold text-base sm:text-lg transition-all duration-300 hover:shadow-lg hover:shadow-[#FF3002]/20 transform hover:scale-105"
               >
                 Começar agora
@@ -4026,43 +4459,557 @@ function App() {
         </section>
       )}
 
+      {/* Seção de Funcionalidades - Mostrar apenas na home */}
+      {!showAnalysis && !showSearchInterface && (
+        <section id="funcionalidades" className="py-8 sm:py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-black via-gray-900/20 to-black relative overflow-hidden">
+          {/* Animação de fundo laranja */}
+          <div className="absolute inset-0 opacity-10">
+            <div className="absolute top-0 left-0 w-full h-full">
+              <div 
+                className="absolute top-1/4 left-0 w-96 h-96 bg-[#FF3002] rounded-full blur-3xl"
+                style={{
+                  animation: 'orangeGlow 8s ease-in-out infinite'
+                }}
+              ></div>
+              <div 
+                className="absolute bottom-1/4 right-0 w-80 h-80 bg-[#FF6B47] rounded-full blur-3xl"
+                style={{
+                  animation: 'orangeGlowDelayed 8s ease-in-out infinite'
+                }}
+              ></div>
+            </div>
+          </div>
+          <div className="relative z-10">
+            <div className="container mx-auto">
+            {/* Header da Seção */}
+            <div className="text-center mb-6 sm:mb-8 lg:mb-12">
+              <div className="inline-flex items-center space-x-2 bg-[#FF3002]/10 border border-[#FF3002]/20 rounded-full px-3 sm:px-4 py-1.5 sm:py-2 mb-4 sm:mb-6">
+                <Target className="w-3 h-3 sm:w-4 sm:h-4 text-[#FF3002]" />
+                <span className="text-[#FF3002] font-semibold text-xs sm:text-sm">TECNOLOGIA AVANÇADA</span>
+              </div>
+              <h2 className="text-2xl sm:text-3xl md:text-4xl lg:text-5xl xl:text-6xl font-bold mb-4 sm:mb-6 leading-tight">
+                <span className="text-white">Por que milhares de apostadores</span><br className="hidden sm:block" />
+                <span className="text-[#FF3002]">confiam na nossa IA?</span>
+              </h2>
+              <p className="text-base sm:text-lg lg:text-xl xl:text-2xl text-gray-300 max-w-4xl mx-auto leading-relaxed">
+                Nossa inteligência artificial processa <span className="text-[#FF3002] font-semibold">847+ dados por análise</span> para entregar 
+                as previsões mais precisas do mercado. <span className="text-white font-semibold">87% de acerto</span> comprovado.
+              </p>
+            </div>
+
+            {/* Grid de Funcionalidades Principais */}
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 sm:gap-6 lg:gap-8 xl:gap-10 mb-6 sm:mb-8 lg:mb-12">
+              
+              {/* Card 1 - Análise Avançada */}
+              <div className="group bg-black/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:p-8 border border-white/10 hover:border-[#FF3002]/30 transition-all duration-500 hover:shadow-2xl hover:shadow-[#FF3002]/20 transform hover:-translate-y-2">
+                <div className="bg-gradient-to-br from-blue-500/20 to-purple-500/20 p-3 sm:p-4 rounded-lg sm:rounded-xl mb-4 sm:mb-6">
+                  <TrendingUp className="w-6 h-6 sm:w-8 sm:h-8 text-blue-400" />
+                </div>
+                <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white mb-3 sm:mb-4">Análise com IA Avançada</h3>
+                <p className="text-gray-300 mb-4 sm:mb-6 leading-relaxed text-sm sm:text-base">
+                  <span className="text-[#FF3002] font-semibold">200+ critérios</span> distribuídos em <span className="text-white font-semibold">13 categorias</span> de análise. 
+                  Nossa IA aprende com cada jogo para melhorar continuamente.
+                </p>
+                <div className="space-y-2 sm:space-y-3">
+                  <div className="flex items-center space-x-2 sm:space-x-3">
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full flex-shrink-0"></div>
+                    <span className="text-xs sm:text-sm text-gray-300">Machine Learning avançado</span>
+                  </div>
+                  <div className="flex items-center space-x-2 sm:space-x-3">
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full flex-shrink-0"></div>
+                    <span className="text-xs sm:text-sm text-gray-300">Análise em tempo real</span>
+                  </div>
+                  <div className="flex items-center space-x-2 sm:space-x-3">
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full flex-shrink-0"></div>
+                    <span className="text-xs sm:text-sm text-gray-300">Indicadores visuais</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 2 - Dados Reais */}
+              <div className="group bg-black/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:p-8 border border-white/10 hover:border-[#FF3002]/30 transition-all duration-500 hover:shadow-2xl hover:shadow-[#FF3002]/20 transform hover:-translate-y-2">
+                <div className="bg-gradient-to-br from-green-500/20 to-emerald-500/20 p-3 sm:p-4 rounded-lg sm:rounded-xl mb-4 sm:mb-6">
+                  <BarChart3 className="w-6 h-6 sm:w-8 sm:h-8 text-green-400" />
+                </div>
+                <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white mb-3 sm:mb-4">Dados Esportivos Reais</h3>
+                <p className="text-gray-300 mb-4 sm:mb-6 leading-relaxed text-sm sm:text-base">
+                  Integração direta com a <span className="text-[#FF3002] font-semibold">API Football</span> para dados atualizados. 
+                  Estatísticas de temporada, confrontos diretos e odds reais.
+                </p>
+                <div className="space-y-2 sm:space-y-3">
+                  <div className="flex items-center space-x-2 sm:space-x-3">
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full flex-shrink-0"></div>
+                    <span className="text-xs sm:text-sm text-gray-300">Estatísticas completas</span>
+                  </div>
+                  <div className="flex items-center space-x-2 sm:space-x-3">
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full flex-shrink-0"></div>
+                    <span className="text-xs sm:text-sm text-gray-300">Histórico H2H</span>
+                  </div>
+                  <div className="flex items-center space-x-2 sm:space-x-3">
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full flex-shrink-0"></div>
+                    <span className="text-xs sm:text-sm text-gray-300">Odds de casas reais</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 3 - Mercados Diversos */}
+              <div className="group bg-black/40 backdrop-blur-xl rounded-xl sm:rounded-2xl p-4 sm:p-6 lg:p-8 border border-white/10 hover:border-[#FF3002]/30 transition-all duration-500 hover:shadow-2xl hover:shadow-[#FF3002]/20 transform hover:-translate-y-2">
+                <div className="bg-gradient-to-br from-orange-500/20 to-red-500/20 p-3 sm:p-4 rounded-lg sm:rounded-xl mb-4 sm:mb-6">
+                  <Target className="w-6 h-6 sm:w-8 sm:h-8 text-orange-400" />
+                </div>
+                <h3 className="text-lg sm:text-xl lg:text-2xl font-bold text-white mb-3 sm:mb-4">25+ Tipos de Mercados</h3>
+                <p className="text-gray-300 mb-4 sm:mb-6 leading-relaxed text-sm sm:text-base">
+                  Desde apostas básicas até mercados especializados. <span className="text-[#FF3002] font-semibold">Handicap asiático</span>, 
+                  apostas de jogadores e muito mais.
+                </p>
+                <div className="space-y-2 sm:space-y-3">
+                  <div className="flex items-center space-x-2 sm:space-x-3">
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full flex-shrink-0"></div>
+                    <span className="text-xs sm:text-sm text-gray-300">Gols e resultados</span>
+                  </div>
+                  <div className="flex items-center space-x-2 sm:space-x-3">
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full flex-shrink-0"></div>
+                    <span className="text-xs sm:text-sm text-gray-300">Apostas de jogadores</span>
+                  </div>
+                  <div className="flex items-center space-x-2 sm:space-x-3">
+                    <div className="w-1.5 h-1.5 sm:w-2 sm:h-2 bg-green-400 rounded-full flex-shrink-0"></div>
+                    <span className="text-xs sm:text-sm text-gray-300">Mercados especiais</span>
+                  </div>
+                </div>
+              </div>
+
+                             {/* Card 4 - Critérios de Análise */}
+               <div className="group bg-black/40 backdrop-blur-xl rounded-2xl p-6 sm:p-8 border border-white/10 hover:border-[#FF3002]/30 transition-all duration-500 hover:shadow-2xl hover:shadow-[#FF3002]/20 transform hover:-translate-y-2">
+                 <div className="bg-gradient-to-br from-purple-500/20 to-pink-500/20 p-4 rounded-xl mb-6">
+                   <Target className="w-8 h-8 text-purple-400" />
+                 </div>
+                 <h3 className="text-xl sm:text-2xl font-bold text-white mb-4">Critérios de Análise</h3>
+                 <p className="text-gray-300 mb-6 leading-relaxed">
+                   <span className="text-[#FF3002] font-semibold">13 categorias</span> de análise cobrindo forma recente, confrontos diretos, 
+                   força estrutural e muito mais para previsões precisas.
+                 </p>
+                 <div className="space-y-3">
+                   <div className="flex items-center space-x-3">
+                     <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                     <span className="text-sm text-gray-300">Força estrutural & divisão</span>
+                   </div>
+                   <div className="flex items-center space-x-3">
+                     <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                     <span className="text-sm text-gray-300">Histórico H2H completo</span>
+                   </div>
+                   <div className="flex items-center space-x-3">
+                     <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                     <span className="text-sm text-gray-300">Análise psicológica</span>
+                   </div>
+                 </div>
+               </div>
+
+              {/* Card 5 - Sistema de Risco */}
+              <div className="group bg-black/40 backdrop-blur-xl rounded-2xl p-6 sm:p-8 border border-white/10 hover:border-[#FF3002]/30 transition-all duration-500 hover:shadow-2xl hover:shadow-[#FF3002]/20 transform hover:-translate-y-2">
+                <div className="bg-gradient-to-br from-yellow-500/20 to-orange-500/20 p-4 rounded-xl mb-6">
+                  <AlertTriangle className="w-8 h-8 text-yellow-400" />
+                </div>
+                <h3 className="text-xl sm:text-2xl font-bold text-white mb-4">Sistema de Risco Inteligente</h3>
+                <p className="text-gray-300 mb-6 leading-relaxed">
+                  Classificação automática de risco com <span className="text-[#FF3002] font-semibold">4 níveis</span>. 
+                  Desde apostas conservadoras até oportunidades de alto retorno.
+                </p>
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                    <span className="text-sm text-gray-300">Risco baixo a elevado</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                    <span className="text-sm text-gray-300">Confiança calculada</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                    <span className="text-sm text-gray-300">Gestão inteligente</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Card 6 - Performance Comprovada */}
+              <div className="group bg-black/40 backdrop-blur-xl rounded-2xl p-6 sm:p-8 border border-white/10 hover:border-[#FF3002]/30 transition-all duration-500 hover:shadow-2xl hover:shadow-[#FF3002]/20 transform hover:-translate-y-2">
+                <div className="bg-gradient-to-br from-emerald-500/20 to-teal-500/20 p-4 rounded-xl mb-6">
+                  <CheckCircle className="w-8 h-8 text-emerald-400" />
+                </div>
+                <h3 className="text-xl sm:text-2xl font-bold text-white mb-4">Performance Comprovada</h3>
+                                 <p className="text-gray-300 mb-6 leading-relaxed">
+                   <span className="text-[#FF3002] font-semibold">87% de precisão</span> nas previsões. 
+                   Milhares de análises realizadas com resultados consistentes e confiáveis.
+                 </p>
+                <div className="space-y-3">
+                  <div className="flex items-center space-x-3">
+                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                    <span className="text-sm text-gray-300">Taxa de acerto alta</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                    <span className="text-sm text-gray-300">Resultados consistentes</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <div className="w-2 h-2 bg-green-400 rounded-full"></div>
+                    <span className="text-sm text-gray-300">Histórico comprovado</span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Seção de Estatísticas Impressionantes */}
+            <div className="bg-gradient-to-r from-[#FF3002]/10 via-black/50 to-[#FF3002]/10 rounded-2xl sm:rounded-3xl p-6 sm:p-8 lg:p-12 xl:p-16 border border-[#FF3002]/20 mb-6 sm:mb-8 lg:mb-12">
+              <div className="text-center mb-8 sm:mb-12">
+                <h3 className="text-xl sm:text-2xl lg:text-3xl xl:text-4xl font-bold text-white mb-3 sm:mb-4">
+                  Números que <span className="text-[#FF3002]">Falam por Si</span>
+                </h3>
+                <p className="text-base sm:text-lg text-gray-300 max-w-2xl mx-auto">
+                  Nossa tecnologia já processou milhões de dados para entregar as melhores previsões
+                </p>
+              </div>
+              
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 sm:gap-6 lg:gap-8">
+                <div className="text-center">
+                  <div className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-[#FF3002] mb-1 sm:mb-2">847+</div>
+                  <div className="text-xs sm:text-sm lg:text-base text-gray-300">Dados por análise</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-[#FF3002] mb-1 sm:mb-2">87%</div>
+                  <div className="text-xs sm:text-sm lg:text-base text-gray-300">Taxa de precisão</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-[#FF3002] mb-1 sm:mb-2">200+</div>
+                  <div className="text-xs sm:text-sm lg:text-base text-gray-300">Critérios analisados</div>
+                </div>
+                <div className="text-center">
+                  <div className="text-2xl sm:text-3xl lg:text-4xl xl:text-5xl font-bold text-[#FF3002] mb-1 sm:mb-2">25+</div>
+                  <div className="text-xs sm:text-sm lg:text-base text-gray-300">Tipos de apostas</div>
+                </div>
+              </div>
+            </div>
+          </div>
+          </div>
+        </section>
+      )}
+
+      {/* Seção de Planos - Mostrar apenas na home */}
+      {!showAnalysis && !showSearchInterface && (
+        <section id="planos" className="py-8 sm:py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-black via-gray-900/30 to-black">
+          <div className="container mx-auto">
+            {/* Header da Seção */}
+            <div className="text-center mb-8 sm:mb-12">
+              <div className="inline-flex items-center space-x-2 bg-[#FF3002]/10 border border-[#FF3002]/20 rounded-full px-4 py-2 mb-6">
+                <Target className="w-4 h-4 text-[#FF3002]" />
+                <span className="text-[#FF3002] font-semibold text-sm">PLANOS FLEXÍVEIS</span>
+              </div>
+              <h2 className="text-3xl sm:text-4xl md:text-5xl lg:text-6xl font-bold mb-6 leading-tight">
+                <span className="text-white">Escolha o plano</span><br />
+                <span className="text-[#FF3002]">perfeito para você</span>
+              </h2>
+              <p className="text-lg sm:text-xl lg:text-2xl text-gray-300 max-w-4xl mx-auto leading-relaxed">
+                Desde iniciantes até apostadores profissionais. Temos o plano ideal para cada nível de experiência.
+              </p>
+            </div>
+
+            {/* Grid de Planos */}
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-6 sm:gap-8 lg:gap-10 max-w-6xl mx-auto mb-8 lg:mb-12">
+              
+              {/* Plano Básico */}
+              <div className="group bg-black/40 backdrop-blur-xl rounded-2xl p-6 sm:p-8 border border-white/10 hover:border-[#FF3002]/30 transition-all duration-500 hover:shadow-2xl hover:shadow-[#FF3002]/20 transform hover:-translate-y-2 relative">
+                <div className="text-center mb-8">
+                  <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4">Plano Básico</h3>
+                  <div className="mb-6">
+                    <span className="text-4xl sm:text-5xl font-bold text-[#FF3002]">R$ 35</span>
+                    <span className="text-gray-400 text-lg">/mês</span>
+                  </div>
+                  <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 p-4 rounded-xl">
+                    <Target className="w-8 h-8 text-blue-400 mx-auto mb-2" />
+                    <p className="text-blue-400 font-semibold text-sm">PERFEITO PARA INICIANTES</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-4 mb-8">
+                  <div className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                    <span className="text-gray-300">Análise com IA Avançada</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                    <span className="text-gray-300">Dados Esportivos Reais</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                    <span className="text-gray-300">25+ Tipos de Mercados</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                    <span className="text-gray-300">Sistema de Risco Inteligente</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                    <span className="text-gray-300 font-semibold">Análise de 7 jogos por dia</span>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => handlePlanPayment('Plano Básico', 3500)} // R$ 35,00 em centavos
+                  className="w-full bg-gray-700 hover:bg-gray-600 text-white py-3 sm:py-4 rounded-xl font-bold text-lg transition-all duration-300 hover:shadow-lg transform hover:scale-105"
+                >
+                  Escolher Básico
+                </button>
+              </div>
+
+              {/* Plano Pro - Destaque */}
+              <div className="group bg-gradient-to-br from-[#FF3002]/20 via-black/60 to-[#FF3002]/10 backdrop-blur-xl rounded-2xl p-6 sm:p-8 border-2 border-[#FF3002]/50 hover:border-[#FF3002] transition-all duration-500 hover:shadow-2xl hover:shadow-[#FF3002]/30 transform hover:-translate-y-2 relative scale-105">
+                {/* Badge Mais Popular */}
+                <div className="absolute -top-4 left-1/2 transform -translate-x-1/2">
+                  <div className="bg-[#FF3002] text-white px-4 py-2 rounded-full text-sm font-bold">
+                    MAIS POPULAR
+                  </div>
+                </div>
+
+                <div className="text-center mb-8">
+                  <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4">Plano Pro</h3>
+                  <div className="mb-6">
+                    <span className="text-4xl sm:text-5xl font-bold text-[#FF3002]">R$ 45</span>
+                    <span className="text-gray-400 text-lg">/mês</span>
+                  </div>
+                  <div className="bg-gradient-to-r from-[#FF3002]/30 to-orange-500/30 p-4 rounded-xl">
+                    <TrendingUp className="w-8 h-8 text-[#FF3002] mx-auto mb-2" />
+                    <p className="text-[#FF3002] font-semibold text-sm">PARA APOSTADORES ATIVOS</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-4 mb-8">
+                  <div className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                    <span className="text-gray-300">Análise com IA Avançada</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                    <span className="text-gray-300">Dados Esportivos Reais</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                    <span className="text-gray-300">25+ Tipos de Mercados</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                    <span className="text-gray-300">Sistema de Risco Inteligente</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                    <span className="text-gray-300 font-semibold">Análise de 15 jogos por dia</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-[#FF3002] flex-shrink-0" />
+                    <span className="text-[#FF3002] font-semibold">Suporte 24 horas</span>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => handlePlanPayment('Plano Pro', 4500)} // R$ 45,00 em centavos
+                  className="w-full bg-[#FF3002] hover:bg-[#E02702] text-white py-3 sm:py-4 rounded-xl font-bold text-lg transition-all duration-300 hover:shadow-2xl hover:shadow-[#FF3002]/30 transform hover:scale-105"
+                >
+                  Escolher Pro
+                </button>
+              </div>
+
+              {/* Plano Premium */}
+              <div className="group bg-black/40 backdrop-blur-xl rounded-2xl p-6 sm:p-8 border border-white/10 hover:border-[#FF3002]/30 transition-all duration-500 hover:shadow-2xl hover:shadow-[#FF3002]/20 transform hover:-translate-y-2 relative">
+                <div className="text-center mb-8">
+                  <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4">Plano Premium</h3>
+                  <div className="mb-6">
+                    <span className="text-4xl sm:text-5xl font-bold text-[#FF3002]">R$ 75</span>
+                    <span className="text-gray-400 text-lg">/mês</span>
+                  </div>
+                  <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 p-4 rounded-xl">
+                    <Users className="w-8 h-8 text-purple-400 mx-auto mb-2" />
+                    <p className="text-purple-400 font-semibold text-sm">PARA PROFISSIONAIS</p>
+                  </div>
+                </div>
+                
+                <div className="space-y-4 mb-8">
+                  <div className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                    <span className="text-gray-300">Análise com IA Avançada</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                    <span className="text-gray-300">Dados Esportivos Reais</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                    <span className="text-gray-300">25+ Tipos de Mercados</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                    <span className="text-gray-300">Sistema de Risco Inteligente</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-[#FF3002] flex-shrink-0" />
+                    <span className="text-[#FF3002] font-semibold">Análise ilimitada</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-[#FF3002] flex-shrink-0" />
+                    <span className="text-[#FF3002] font-semibold">Velocidade extra de análise</span>
+                  </div>
+                  <div className="flex items-center space-x-3">
+                    <CheckCircle className="w-5 h-5 text-[#FF3002] flex-shrink-0" />
+                    <span className="text-[#FF3002] font-semibold">Suporte prioritário</span>
+                  </div>
+                </div>
+
+                <button 
+                  onClick={() => handlePlanPayment('Plano Premium', 7500)} // R$ 75,00 em centavos
+                  className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-3 sm:py-4 rounded-xl font-bold text-lg transition-all duration-300 hover:shadow-2xl hover:shadow-purple-500/30 transform hover:scale-105"
+                >
+                  Escolher Premium
+                </button>
+              </div>
+            </div>
+
+            {/* Seção de Benefícios Adicionais */}
+            <div className="bg-gradient-to-r from-[#FF3002]/10 via-black/50 to-[#FF3002]/10 rounded-3xl p-8 sm:p-12 lg:p-16 border border-[#FF3002]/20 mb-8 lg:mb-12">
+              <div className="text-center mb-12">
+                <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4">
+                  Todos os planos incluem
+                </h3>
+                <p className="text-lg text-gray-300 max-w-2xl mx-auto">
+                  Recursos essenciais para maximizar suas chances de sucesso
+                </p>
+              </div>
+              
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 sm:gap-8">
+                <div className="text-center">
+                  <div className="bg-[#FF3002]/20 p-4 rounded-xl mb-4 inline-block">
+                    <BarChart3 className="w-8 h-8 text-[#FF3002] mx-auto" />
+                  </div>
+                  <h4 className="text-white font-semibold mb-2">87% de Precisão</h4>
+                  <p className="text-gray-400 text-sm">Taxa de acerto comprovada em milhares de análises</p>
+                </div>
+                
+                <div className="text-center">
+                  <div className="bg-[#FF3002]/20 p-4 rounded-xl mb-4 inline-block">
+                    <Target className="w-8 h-8 text-[#FF3002] mx-auto" />
+                  </div>
+                  <h4 className="text-white font-semibold mb-2">200+ Critérios</h4>
+                  <p className="text-gray-400 text-sm">Análise completa com 13 categorias diferentes</p>
+                </div>
+                
+                <div className="text-center">
+                  <div className="bg-[#FF3002]/20 p-4 rounded-xl mb-4 inline-block">
+                    <TrendingUp className="w-8 h-8 text-[#FF3002] mx-auto" />
+                  </div>
+                  <h4 className="text-white font-semibold mb-2">Dados em Tempo Real</h4>
+                  <p className="text-gray-400 text-sm">Integração direta com API Football</p>
+                </div>
+                
+                <div className="text-center">
+                  <div className="bg-[#FF3002]/20 p-4 rounded-xl mb-4 inline-block">
+                    <CheckCircle className="w-8 h-8 text-[#FF3002] mx-auto" />
+                  </div>
+                  <h4 className="text-white font-semibold mb-2">Sem Limitações</h4>
+                  <p className="text-gray-400 text-sm">Acesse todos os tipos de apostas disponíveis</p>
+                </div>
+              </div>
+            </div>
+
+
+          </div>
+        </section>
+      )}
+
       {/* Search Interface - Mostrar quando clicar em "Começar agora" */}
       {showSearchInterface && !showAnalysis && (
-      <section className="py-8 sm:py-12 flex-1">
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8">
-            <div className="max-w-2xl mx-auto relative">
+      <section className="py-8 sm:py-12 flex-1 relative overflow-hidden">
+        {/* Background animado */}
+        <div className="absolute inset-0 opacity-5 z-0">
+          <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-[#FF3002] rounded-full blur-3xl animate-pulse"></div>
+          <div className="absolute bottom-1/4 right-1/4 w-48 h-48 bg-[#FF6B47] rounded-full blur-3xl animate-pulse" style={{animationDelay: '2s'}}></div>
+        </div>
+
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-20">
+          {/* Header da busca */}
+          <div className="text-center mb-8 sm:mb-12">
+            <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-4">
+              Buscar <span className="text-[#FF3002]">Time</span>
+            </h2>
+            <p className="text-lg text-gray-300 max-w-2xl mx-auto mb-6">
+              Digite o nome do time que deseja analisar e nossa IA fará uma análise completa
+            </p>
+          </div>
+
+          <div className="max-w-2xl mx-auto relative">
             <div className="relative">
               <input
                 type="text"
-                  placeholder="Digite pelo menos 3 letras do nome de um time (ex: Liverpool, Flamengo)..."
-                  value={searchTerm}
-                  onChange={handleSearchChange}
-                  onFocus={() => {
-                    if (searchStep === 'teams' && teams.length > 0) {
-                      setShowResults(true);
-                    }
-                  }}
-                className="w-full bg-[#1a1a1a] border border-gray-700 rounded-xl px-4 sm:px-6 py-3 sm:py-4 pl-12 sm:pl-14 text-white placeholder-gray-400 focus:outline-none focus:border-[#FF3002] transition-colors duration-300 text-sm sm:text-base"
+                placeholder="Digite pelo menos 3 letras do nome de um time (ex: Liverpool, Flamengo)..."
+                value={searchTerm}
+                onChange={handleSearchChange}
+                onFocus={() => {
+                  if (searchStep === 'teams' && teams.length > 0) {
+                    setShowResults(true);
+                  }
+                }}
+                className="w-full bg-black/40 backdrop-blur-xl border border-white/20 rounded-2xl px-4 sm:px-6 py-4 sm:py-5 pl-14 sm:pl-16 text-white placeholder-gray-400 focus:outline-none focus:border-[#FF3002] focus:shadow-xl focus:shadow-[#FF3002]/20 transition-all duration-300 text-sm sm:text-base"
               />
-              <Search className="absolute left-3 sm:left-4 top-1/2 transform -translate-y-1/2 text-[#FF3002] w-5 h-5 sm:w-6 sm:h-6" />
-                {loading && (
-                  <div className="absolute right-3 sm:right-4 top-1/2 transform -translate-y-1/2">
-                    <div className="animate-spin rounded-full h-5 w-5 sm:h-6 sm:w-6 border-b-2 border-[#FF3002]"></div>
+              <Search className="absolute left-4 sm:left-5 top-1/2 transform -translate-y-1/2 text-[#FF3002] w-5 h-5 sm:w-6 sm:h-6" />
+              {loading && (
+                <div className="absolute right-4 sm:right-5 top-1/2 transform -translate-y-1/2">
+                  <div className="animate-spin rounded-full h-5 w-5 sm:h-6 sm:w-6 border-b-2 border-[#FF3002]"></div>
+                </div>
+              )}
             </div>
-                )}
+
+            {/* Sugestões animadas quando não há busca */}
+            {!searchTerm && !loading && (
+              <div className="mt-8">
+                <p className="text-center text-gray-400 mb-6">Exemplos de times populares:</p>
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
+                  {['Real Madrid', 'Barcelona', 'Liverpool', 'Manchester City', 'PSG', 'Bayern Munich'].map((team, index) => (
+                    <button
+                      key={team}
+                      onClick={() => {
+                        setSearchTerm(team);
+                        // Trigger search
+                        handleSearchChange({ target: { value: team } } as any);
+                      }}
+                      className="bg-black/40 backdrop-blur-xl border border-white/10 rounded-xl p-3 text-white hover:border-[#FF3002]/30 hover:bg-[#FF3002]/10 transition-all duration-300 hover:scale-105 group"
+                      style={{
+                        animation: `fadeInUp 0.5s ease-out ${index * 0.1}s both`
+                      }}
+                    >
+                      <span className="text-sm font-medium group-hover:text-[#FF3002] transition-colors">
+                        {team}
+                      </span>
+                    </button>
+                  ))}
+                </div>
               </div>
+            )}
 
               {/* Resultados da Pesquisa */}
-              {showResults && (
+              {showResults && createPortal(
                 <>
                   <div 
-                    className="fixed inset-0 z-40" 
+                    className="fixed inset-0 z-[999998]" 
                     onClick={handleClickOutside}
                   ></div>
-                  <div className="absolute top-full left-0 right-0 mt-2 bg-[#1a1a1a] border border-gray-700 rounded-xl shadow-xl z-50 max-h-[400px] sm:max-h-[600px] overflow-y-auto">
+                  <div 
+                    className="fixed bg-black/95 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl z-[999999] max-h-[320px] overflow-y-auto custom-scrollbar"
+                    style={{
+                      top: '395px',
+                      left: '50%',
+                      transform: 'translateX(-50%)',
+                      width: 'calc(100% - 2rem)',
+                      maxWidth: '42rem'
+                    }}
+                  >
                     {renderResults()}
                   </div>
-                </>
+                </>,
+                document.body
               )}
           </div>
         </div>
@@ -4582,6 +5529,50 @@ function App() {
        )}
       </div>
 
+      {/* Seção de Confiança e CTA Final - Mostrar apenas na home */}
+      {!showAnalysis && !showSearchInterface && (
+        <section className="py-8 sm:py-12 px-4 sm:px-6 lg:px-8 bg-gradient-to-b from-black via-gray-900/20 to-black">
+          <div className="container mx-auto">
+            {/* Seção de Confiança e Social Proof */}
+            <div className="text-center mb-8 lg:mb-12">
+              <div className="inline-flex items-center space-x-2 bg-green-500/10 border border-green-500/20 rounded-full px-4 py-2 mb-6">
+                <CheckCircle className="w-4 h-4 text-green-400" />
+                <span className="text-green-400 font-semibold text-sm">CONFIÁVEL E SEGURO</span>
+              </div>
+              <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-6">
+                Por que <span className="text-[#FF3002]">milhares de apostadores</span> escolhem a ApostAI?
+              </h3>
+              <p className="text-lg text-gray-300 max-w-3xl mx-auto mb-8">
+                Nossa tecnologia é utilizada por apostadores profissionais e iniciantes que buscam 
+                <span className="text-white font-semibold"> resultados consistentes</span> e 
+                <span className="text-[#FF3002] font-semibold"> análises confiáveis</span>.
+              </p>
+            </div>
+
+            {/* CTA Final */}
+            <div className="text-center">
+              <div className="bg-gradient-to-r from-[#FF3002]/20 to-[#FF6B47]/20 rounded-2xl p-8 sm:p-12 border border-[#FF3002]/30 max-w-4xl mx-auto">
+                <h3 className="text-2xl sm:text-3xl md:text-4xl font-bold text-white mb-4">
+                  Pronto para <span className="text-[#FF3002]">revolucionar</span> suas apostas?
+                </h3>
+                <p className="text-lg text-gray-300 mb-8 max-w-2xl mx-auto">
+                  Junte-se a milhares de apostadores que já confiam na nossa IA para tomar decisões mais inteligentes
+                </p>
+                <button 
+                  onClick={() => scrollToSection('planos')}
+                  className="bg-[#FF3002] hover:bg-[#E02702] text-white px-8 sm:px-12 py-4 sm:py-5 rounded-xl lg:rounded-2xl font-bold text-lg sm:text-xl transition-all duration-300 hover:shadow-2xl hover:shadow-[#FF3002]/30 transform hover:scale-105"
+                >
+                  Começar Agora
+                </button>
+                <p className="text-sm text-gray-400 mt-4">
+                  ⚡ Análise completa em menos de 30 segundos
+                </p>
+              </div>
+            </div>
+          </div>
+        </section>
+      )}
+
       {/* Footer - Presente em todas as telas */}
       <footer className="border-t border-gray-800 py-4 sm:py-6 mt-auto">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
@@ -4612,6 +5603,59 @@ function App() {
             Nova Pesquisa
           </span>
         </button>
+      )}
+
+      {/* Modal de Login */}
+      {showLoginModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-black/95 border border-white/10 rounded-2xl p-8 w-full max-w-md shadow-2xl">
+            <div className="flex items-center justify-between mb-6">
+              <h3 className="text-xl font-bold text-white">Acesso ao Sistema</h3>
+              <button
+                onClick={() => setShowLoginModal(false)}
+                className="text-gray-400 hover:text-white transition-colors"
+              >
+                <X className="w-6 h-6" />
+              </button>
+            </div>
+
+            <form onSubmit={handleUserLogin} className="space-y-6">
+              <div>
+                <label className="block text-white font-medium mb-2">Código de Acesso</label>
+                <input
+                  type="text"
+                  value={loginCode}
+                  onChange={(e) => setLoginCode(e.target.value)}
+                  className="w-full bg-black/60 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-[#FF3002] transition-colors"
+                  placeholder="Digite seu código de acesso"
+                  required
+                />
+              </div>
+
+              {loginError && (
+                <div className="bg-red-500/10 border border-red-500/20 rounded-xl p-3 text-red-400 text-sm">
+                  {loginError}
+                </div>
+              )}
+
+              <div className="flex space-x-4">
+                <button
+                  type="button"
+                  onClick={() => setShowLoginModal(false)}
+                  className="flex-1 bg-gray-600 hover:bg-gray-700 text-white py-3 rounded-xl font-bold transition-all duration-300"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  className="flex-1 bg-gradient-to-r from-[#FF3002] to-[#FF6B47] hover:from-[#E02702] hover:to-[#FF3002] text-white py-3 rounded-xl font-bold transition-all duration-300"
+                >
+                  Entrar
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
       )}
     </div>
   );
