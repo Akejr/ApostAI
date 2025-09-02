@@ -17,6 +17,7 @@ export interface PaidUser {
   created_at: string;
   expires_at: string;
   updated_at: string;
+  coupon_code?: string;
 }
 
 // Salvar usuário pago na tabela users existente
@@ -27,6 +28,7 @@ export const savePaidUser = async (userData: {
   planPrice: number;
   orderId: string;
   transactionId: string;
+  couponCode?: string; // Cupom opcional
 }): Promise<PaidUser | null> => {
   try {
     // Calcular data de expiração (30 dias a partir de agora)
@@ -66,7 +68,8 @@ export const savePaidUser = async (userData: {
           credits: creditsByPlan[userData.plan as keyof typeof creditsByPlan] || 7,
           analyses: 0,
           status: 'active',
-          expires_at: expiresAt.toISOString()
+          expires_at: expiresAt.toISOString(),
+          coupon_code: userData.couponCode || null // Usar cupom se fornecido
         }
       ])
       .select()
@@ -103,6 +106,154 @@ export const getUserByCode = async (code: string): Promise<PaidUser | null> => {
   } catch (error) {
     console.error('Erro ao buscar usuário no Supabase:', error);
     return null;
+  }
+};
+
+// Função para verificar se usuário tem créditos disponíveis
+export const checkUserCredits = async (userId: string): Promise<{ hasCredits: boolean; creditsLeft: number; plan: string }> => {
+  try {
+    console.log('🔍 Verificando créditos para usuário:', userId);
+    
+    const { data, error } = await supabase
+      .from('users')
+      .select('credits, plan')
+      .eq('id', userId)
+      .eq('status', 'active')
+      .single();
+
+    if (error || !data) {
+      console.log('❌ Erro ao buscar usuário ou usuário não encontrado:', error);
+      return { hasCredits: false, creditsLeft: 0, plan: 'unknown' };
+    }
+
+    console.log('🔍 Dados do usuário encontrados:', { credits: data.credits, plan: data.plan });
+
+    // Usuários Premium têm créditos ilimitados
+    if (data.plan === 'Premium') {
+      console.log('💎 Usuário Premium detectado');
+      return { hasCredits: true, creditsLeft: 999, plan: 'Premium' };
+    }
+
+    const hasCredits = data.credits > 0;
+    console.log('🔍 Resultado da verificação:', { hasCredits, creditsLeft: data.credits, plan: data.plan });
+    return { hasCredits, creditsLeft: data.credits, plan: data.plan };
+  } catch (error) {
+    console.error('❌ Erro ao verificar créditos:', error);
+    return { hasCredits: false, creditsLeft: 0, plan: 'unknown' };
+  }
+};
+
+// Função para desconta um crédito do usuário
+export const deductUserCredit = async (userId: string): Promise<{ success: boolean; creditsLeft: number; error?: string }> => {
+  try {
+    console.log('🔍 Iniciando desconto de crédito para usuário:', userId);
+    
+    // Primeiro verificar se o usuário tem créditos
+    const creditCheck = await checkUserCredits(userId);
+    console.log('🔍 Verificação de créditos:', creditCheck);
+    
+    if (!creditCheck.hasCredits) {
+      console.log('❌ Usuário sem créditos disponíveis');
+      return { success: false, creditsLeft: 0, error: 'Sem créditos disponíveis' };
+    }
+
+    // Se for Premium, não desconta (créditos ilimitados)
+    if (creditCheck.plan === 'Premium') {
+      console.log('💎 Usuário Premium - sem desconto de créditos');
+      return { success: true, creditsLeft: 999, error: undefined };
+    }
+
+    console.log('🔍 Descontando crédito. Créditos atuais:', creditCheck.creditsLeft, 'Novos créditos:', creditCheck.creditsLeft - 1);
+    
+    // Desconta um crédito e incrementa o contador de análises
+    const { data, error } = await supabase
+      .from('users')
+      .update({ 
+        credits: creditCheck.creditsLeft - 1
+      })
+      .eq('id', userId)
+      .eq('status', 'active')
+      .select('credits, analyses')
+      .single();
+
+    if (error) {
+      console.error('❌ Erro ao descontar crédito:', error);
+      return { success: false, creditsLeft: creditCheck.creditsLeft, error: 'Erro ao atualizar créditos' };
+    }
+
+    console.log('✅ Crédito descontado com sucesso. Novos créditos:', data.credits);
+
+    // Incrementar análises em uma operação separada
+    const { error: analysesError } = await supabase
+      .from('users')
+      .update({ 
+        analyses: (data.analyses || 0) + 1
+      })
+      .eq('id', userId);
+
+    if (analysesError) {
+      console.error('⚠️ Erro ao incrementar análises:', analysesError);
+      // Não falha se não conseguir incrementar análises, mas loga o erro
+    } else {
+      console.log('✅ Análises incrementadas com sucesso');
+    }
+
+    return { success: true, creditsLeft: data.credits, error: undefined };
+  } catch (error) {
+    console.error('Erro ao descontar crédito:', error);
+    return { success: false, creditsLeft: 0, error: 'Erro interno' };
+  }
+};
+
+// Função para resetar créditos diariamente (será chamada pelo Supabase Edge Functions)
+export const resetDailyCredits = async (): Promise<void> => {
+  try {
+    // Resetar créditos para usuários ativos (não Premium)
+    const { error } = await supabase
+      .from('users')
+      .update({ 
+        credits: supabase.sql`CASE 
+          WHEN plan = 'Básico' THEN 7
+          WHEN plan = 'Pro' THEN 15
+          ELSE credits
+        END`
+      })
+      .eq('status', 'active')
+      .neq('plan', 'Premium');
+
+    if (error) {
+      console.error('Erro ao resetar créditos:', error);
+    } else {
+      console.log('✅ Créditos diários resetados com sucesso');
+    }
+  } catch (error) {
+    console.error('Erro ao resetar créditos diários:', error);
+  }
+};
+
+// Função para obter informações completas do usuário incluindo créditos
+export const getUserWithCredits = async (userId: string): Promise<{
+  user: PaidUser | null;
+  creditsInfo: { hasCredits: boolean; creditsLeft: number; plan: string };
+}> => {
+  try {
+    const { data, error } = await supabase
+      .from('users')
+      .select('*')
+      .eq('id', userId)
+      .eq('status', 'active')
+      .single();
+
+    if (error || !data) {
+      return { user: null, creditsInfo: { hasCredits: false, creditsLeft: 0, plan: 'unknown' } };
+    }
+
+    const creditsInfo = await checkUserCredits(userId);
+    
+    return { user: data, creditsInfo };
+  } catch (error) {
+    console.error('Erro ao buscar usuário com créditos:', error);
+    return { user: null, creditsInfo: { hasCredits: false, creditsLeft: 0, plan: 'unknown' } };
   }
 };
 

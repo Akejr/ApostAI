@@ -1,7 +1,8 @@
--- Script de configuração do Supabase para o Painel Admin
+-- Script de configuração do Supabase para o Painel Admin (VERSÃO CORRIGIDA)
 -- Execute este script no SQL Editor do Supabase
+-- Este script verifica se os objetos já existem antes de criá-los
 
--- 1. Criar tabela de usuários
+-- 1. Criar tabela de usuários (se não existir)
 CREATE TABLE IF NOT EXISTS users (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     name VARCHAR(255) NOT NULL,
@@ -15,7 +16,7 @@ CREATE TABLE IF NOT EXISTS users (
     updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 2. Criar tabela de administradores
+-- 2. Criar tabela de administradores (se não existir)
 CREATE TABLE IF NOT EXISTS admin_users (
     id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
     username VARCHAR(100) UNIQUE NOT NULL,
@@ -23,19 +24,19 @@ CREATE TABLE IF NOT EXISTS admin_users (
     created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
 );
 
--- 3. Inserir usuário admin padrão (senha: aeiou123)
+-- 3. Inserir usuário admin padrão (senha: aeiou123) - apenas se não existir
 INSERT INTO admin_users (username, password_hash) 
 VALUES ('ecasanovs', '$2a$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi')
 ON CONFLICT (username) DO NOTHING;
 
--- 4. Inserir alguns usuários de exemplo
+-- 4. Inserir alguns usuários de exemplo - apenas se não existirem
 INSERT INTO users (name, code, plan, credits, analyses, status, expires_at) VALUES
 ('João Silva', 'JS2024001', 'Pro', 15, 47, 'active', NOW() + INTERVAL '30 days'),
 ('Maria Santos', 'MS2024002', 'Básico', 7, 23, 'active', NOW() + INTERVAL '30 days'),
 ('Pedro Costa', 'PC2024003', 'Premium', 0, 89, 'expired', NOW() - INTERVAL '5 days')
 ON CONFLICT (code) DO NOTHING;
 
--- 5. Criar função para atualizar updated_at automaticamente
+-- 5. Criar função para atualizar updated_at automaticamente (se não existir)
 CREATE OR REPLACE FUNCTION update_updated_at_column()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -56,21 +57,70 @@ BEGIN
             BEFORE UPDATE ON users 
             FOR EACH ROW 
             EXECUTE FUNCTION update_updated_at_column();
+        RAISE NOTICE 'Trigger update_users_updated_at criado com sucesso';
+    ELSE
+        RAISE NOTICE 'Trigger update_users_updated_at já existe, pulando criação';
     END IF;
 END $$;
 
--- 7. Configurar Row Level Security (RLS)
-ALTER TABLE users ENABLE ROW LEVEL SECURITY;
-ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
+-- 7. Configurar Row Level Security (RLS) - apenas se não estiver habilitado
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_tables 
+        WHERE tablename = 'users' 
+        AND rowsecurity = true
+    ) THEN
+        ALTER TABLE users ENABLE ROW LEVEL SECURITY;
+        RAISE NOTICE 'RLS habilitado para tabela users';
+    ELSE
+        RAISE NOTICE 'RLS já está habilitado para tabela users';
+    END IF;
+    
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_tables 
+        WHERE tablename = 'admin_users' 
+        AND rowsecurity = true
+    ) THEN
+        ALTER TABLE admin_users ENABLE ROW LEVEL SECURITY;
+        RAISE NOTICE 'RLS habilitado para tabela admin_users';
+    ELSE
+        RAISE NOTICE 'RLS já está habilitado para tabela admin_users';
+    END IF;
+END $$;
 
 -- 8. Criar políticas de acesso (permitir leitura e escrita para todos - em produção seria mais restritivo)
-CREATE POLICY "Allow all operations on users" ON users
-    FOR ALL USING (true);
+-- Verificar se as políticas já existem antes de criar
+DO $$
+BEGIN
+    -- Política para tabela users
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'users' 
+        AND policyname = 'Allow all operations on users'
+    ) THEN
+        CREATE POLICY "Allow all operations on users" ON users
+            FOR ALL USING (true);
+        RAISE NOTICE 'Política para users criada com sucesso';
+    ELSE
+        RAISE NOTICE 'Política para users já existe, pulando criação';
+    END IF;
+    
+    -- Política para tabela admin_users
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_policies 
+        WHERE tablename = 'admin_users' 
+        AND policyname = 'Allow all operations on admin_users'
+    ) THEN
+        CREATE POLICY "Allow all operations on admin_users" ON admin_users
+            FOR ALL USING (true);
+        RAISE NOTICE 'Política para admin_users criada com sucesso';
+    ELSE
+        RAISE NOTICE 'Política para admin_users já existe, pulando criação';
+    END IF;
+END $$;
 
-CREATE POLICY "Allow all operations on admin_users" ON admin_users
-    FOR ALL USING (true);
-
--- 9. Criar índices para melhor performance
+-- 9. Criar índices para melhor performance (se não existirem)
 CREATE INDEX IF NOT EXISTS idx_users_code ON users(code);
 CREATE INDEX IF NOT EXISTS idx_users_status ON users(status);
 CREATE INDEX IF NOT EXISTS idx_users_plan ON users(plan);
@@ -185,11 +235,7 @@ EXCEPTION
 END;
 $$ LANGUAGE plpgsql;
 
--- 13. NOVO: Configurar cron job para reset diário (requer pg_cron extension)
--- NOTA: Esta funcionalidade requer que o pg_cron extension esteja habilitado no Supabase
--- Para habilitar, entre em contato com o suporte do Supabase
-
--- 14. NOVO: Criar view para estatísticas de créditos
+-- 13. NOVO: Criar view para estatísticas de créditos (se não existir)
 CREATE OR REPLACE VIEW user_credits_stats AS
 SELECT 
     plan,
@@ -203,7 +249,7 @@ WHERE status = 'active'
 GROUP BY plan
 ORDER BY plan;
 
--- 15. Comentários para documentação
+-- 14. Comentários para documentação
 COMMENT ON TABLE users IS 'Tabela de usuários do sistema de apostas';
 COMMENT ON TABLE admin_users IS 'Tabela de administradores do sistema';
 COMMENT ON COLUMN users.code IS 'Código único de acesso do usuário';
@@ -214,7 +260,7 @@ COMMENT ON FUNCTION reset_daily_credits() IS 'Função para resetar créditos di
 COMMENT ON FUNCTION check_and_update_user_credits(UUID) IS 'Função para verificar créditos e permissões de análise';
 COMMENT ON FUNCTION deduct_user_credit_and_increment_analyses(UUID) IS 'Função para descontar crédito e incrementar contador de análises';
 
--- Verificar se as tabelas foram criadas corretamente
+-- 15. Verificar se as tabelas foram criadas corretamente
 SELECT 
     table_name, 
     column_name, 
@@ -224,7 +270,7 @@ FROM information_schema.columns
 WHERE table_name IN ('users', 'admin_users')
 ORDER BY table_name, ordinal_position;
 
--- Verificar se as funções foram criadas
+-- 16. Verificar se as funções foram criadas
 SELECT 
     routine_name,
     routine_type,
@@ -232,3 +278,33 @@ SELECT
 FROM information_schema.routines 
 WHERE routine_name IN ('reset_daily_credits', 'check_and_update_user_credits', 'deduct_user_credit_and_increment_analyses')
 ORDER BY routine_name;
+
+-- 17. Verificar se o trigger foi criado
+SELECT 
+    trigger_name,
+    event_manipulation,
+    event_object_table,
+    action_statement
+FROM information_schema.triggers 
+WHERE trigger_name = 'update_users_updated_at';
+
+-- 18. Verificar se as políticas foram criadas
+SELECT 
+    schemaname,
+    tablename,
+    policyname,
+    permissive,
+    roles,
+    cmd,
+    qual,
+    with_check
+FROM pg_policies 
+WHERE tablename IN ('users', 'admin_users');
+
+-- 19. Mensagem de sucesso
+DO $$
+BEGIN
+    RAISE NOTICE 'Script executado com sucesso!';
+    RAISE NOTICE 'Sistema de créditos configurado e funcionando.';
+    RAISE NOTICE 'Para reset automático diário, configure cron jobs ou execute manualmente: SELECT reset_daily_credits();';
+END $$;

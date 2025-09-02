@@ -5,7 +5,7 @@ import SuccessPage from './components/SuccessPage';
 import { Search, TrendingUp, Users, Target, User, ChevronRight, Calendar, MapPin, ArrowLeft, BarChart3, Clock, TrendingDown, AlertTriangle, CheckCircle, Home, ChevronLeft, Menu, X } from 'lucide-react';
 import logo from './assets/logo.png';
 import Admin from './Admin';
-import { supabase } from './lib/supabase';
+import { supabase, checkUserCredits, deductUserCredit } from './lib/supabase';
 
 // Interfaces expandidas para suportar novos dados
 interface Team {
@@ -364,6 +364,7 @@ function App() {
   // Verificar rotas especiais
   const isAdminRoute = window.location.pathname === '/admin';
   const isAnalyzeRoute = window.location.pathname === '/analisar';
+  const isCheckoutRoute = window.location.pathname === '/checkout';
   
   // Verificar se estamos na rota de sucesso
   const isSuccessRoute = window.location.pathname === '/sucesso';
@@ -377,6 +378,331 @@ function App() {
   if (isSuccessRoute) {
     return <SuccessPage />;
   }
+
+  // Se estamos na rota de checkout, renderizar a página de checkout
+  if (isCheckoutRoute) {
+    // Verificar se há plano selecionado no localStorage ou usar um padrão
+    const savedPlan = localStorage.getItem('selectedPlan');
+    const planData = savedPlan ? JSON.parse(savedPlan) : { name: 'Plano Pro', price: 4500 };
+    
+    // Estados para o checkout
+    const [checkoutCouponCode, setCheckoutCouponCode] = useState('');
+    const [checkoutCouponDiscount, setCheckoutCouponDiscount] = useState(0);
+    const [showCheckoutNotification, setShowCheckoutNotification] = useState(false);
+    const [checkoutNotificationMessage, setCheckoutNotificationMessage] = useState('');
+    const [checkoutNotificationType, setCheckoutNotificationType] = useState<'success' | 'error'>('success');
+    
+    // Função para mostrar notificações personalizadas
+    const showCheckoutNotificationMessage = (message: string, type: 'success' | 'error' = 'success') => {
+      setCheckoutNotificationMessage(message);
+      setCheckoutNotificationType(type);
+      setShowCheckoutNotification(true);
+      setTimeout(() => setShowCheckoutNotification(false), 4000);
+    };
+    
+    // Função para aplicar cupom no checkout
+    const applyCheckoutCoupon = async (code: string) => {
+      if (!code.trim()) {
+        showCheckoutNotificationMessage('Digite um código de cupom!', 'error');
+        return false;
+      }
+
+      try {
+        console.log('🔍 Buscando cupom:', code.toUpperCase());
+        
+        const { data, error } = await supabase
+          .from('coupons')
+          .select('*')
+          .eq('code', code.toUpperCase())
+          .eq('is_active', true)
+          .single();
+
+        console.log('📊 Resultado da busca:', { data, error });
+
+        if (error || !data) {
+          showCheckoutNotificationMessage('Cupom inválido ou inativo!', 'error');
+          return false;
+        }
+
+        setCheckoutCouponDiscount(data.discount_percentage);
+        showCheckoutNotificationMessage(`✅ Cupom aplicado! ${data.discount_percentage}% de desconto`, 'success');
+        console.log(`✅ Cupom aplicado: ${data.name} - ${data.discount_percentage}% de desconto`);
+        return true;
+      } catch (error) {
+        console.error('❌ Erro ao aplicar cupom:', error);
+        showCheckoutNotificationMessage('Erro ao aplicar cupom!', 'error');
+        return false;
+      }
+    };
+    
+    // Calcular valores
+    const discountAmount = (planData.price * checkoutCouponDiscount / 100);
+    const finalPrice = planData.price - discountAmount;
+    
+    return (
+      <div className="min-h-screen bg-black text-white relative overflow-hidden">
+        {/* Background animado com gradientes */}
+        <div className="absolute inset-0 bg-gradient-to-br from-black via-gray-900/50 to-black"></div>
+        <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,_var(--tw-gradient-stops))] from-[#FF3002]/10 via-transparent to-transparent"></div>
+        
+        {/* Header com design premium */}
+        <header className="relative z-10 py-8 px-4 sm:px-6 lg:px-8 border-b border-white/10 bg-black/30 backdrop-blur-xl mb-16 lg:mb-0">
+          <div className="container mx-auto flex items-center justify-between">
+            <button 
+              onClick={() => window.history.back()}
+              className="flex items-center gap-3 text-gray-300 hover:text-white transition-all duration-300 hover:scale-105 group"
+            >
+              <div className="p-2 rounded-full bg-white/10 group-hover:bg-[#FF3002]/20 transition-colors">
+                <ArrowLeft className="w-5 h-5" />
+              </div>
+              <span className="font-medium">Voltar</span>
+            </button>
+            
+            <div className="text-center">
+              <h1 className="text-3xl font-bold bg-gradient-to-r from-white via-[#FF3002] to-white bg-clip-text text-transparent">
+                Checkout
+              </h1>
+              <p className="text-gray-400 mt-1">Finalize sua compra com segurança</p>
+            </div>
+            
+            <div className="w-32"></div> {/* Spacer */}
+          </div>
+        </header>
+
+        <div className="relative z-10 container mx-auto px-4 sm:px-6 lg:px-8 py-8 lg:py-16 mt-20 lg:mt-16">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 lg:gap-12 max-w-7xl mx-auto">
+            
+            {/* Lado Esquerdo - Detalhes do Plano */}
+            <div className="space-y-6 lg:space-y-8">
+              {/* Card do Plano com design premium */}
+              <div className="group bg-gradient-to-br from-[#FF3002]/20 via-black/80 to-[#FF3002]/10 backdrop-blur-xl rounded-2xl lg:rounded-3xl p-6 lg:p-8 border border-[#FF3002]/30 hover:border-[#FF3002]/50 transition-all duration-500 hover:shadow-2xl hover:shadow-[#FF3002]/20 transform hover:-translate-y-1">
+                <div className="text-center mb-6 lg:mb-8">
+                  <div className="inline-flex items-center justify-center w-12 h-12 lg:w-16 lg:h-16 bg-gradient-to-br from-[#FF3002] to-[#E02702] rounded-xl lg:rounded-2xl mb-3 lg:mb-4">
+                    <Target className="w-6 h-6 lg:w-8 lg:h-8 text-white" />
+                  </div>
+                  <h2 className="text-2xl lg:text-3xl font-bold bg-gradient-to-r from-[#FF3002] to-[#E02702] bg-clip-text text-transparent mb-2">
+                    {planData.name}
+                  </h2>
+                  <div className="w-16 lg:w-24 h-1 bg-gradient-to-r from-[#FF3002] to-[#E02702] mx-auto rounded-full"></div>
+                </div>
+                
+                <div className="space-y-4 lg:space-y-6">
+                  {planData.name === 'Plano Básico' && (
+                    <>
+                      <div className="flex items-center gap-3 lg:gap-4 p-3 lg:p-4 bg-white/5 rounded-xl lg:rounded-2xl hover:bg-white/10 transition-colors">
+                        <div className="w-8 h-8 lg:w-10 lg:h-10 bg-green-500/20 rounded-lg lg:rounded-xl flex items-center justify-center">
+                          <CheckCircle className="w-4 h-4 lg:w-5 lg:h-5 text-green-400" />
+                        </div>
+                        <span className="text-white font-medium text-sm lg:text-base">7 análises por dia</span>
+                      </div>
+                      <div className="flex items-center gap-3 lg:gap-4 p-3 lg:p-4 bg-white/5 rounded-xl lg:rounded-2xl hover:bg-white/10 transition-colors">
+                        <div className="w-8 h-8 lg:w-10 lg:h-10 bg-green-500/20 rounded-lg lg:rounded-xl flex items-center justify-center">
+                          <CheckCircle className="w-4 h-4 lg:w-5 lg:h-5 text-green-400" />
+                        </div>
+                        <span className="text-white font-medium text-sm lg:text-base">Algoritmo avançado</span>
+                      </div>
+                      <div className="flex items-center gap-3 lg:gap-4 p-3 lg:p-4 bg-white/5 rounded-xl lg:rounded-2xl hover:bg-white/10 transition-colors">
+                        <div className="w-8 h-8 lg:w-10 lg:h-10 bg-green-500/20 rounded-lg lg:rounded-xl flex items-center justify-center">
+                          <CheckCircle className="w-4 h-4 lg:w-5 lg:h-5 text-green-400" />
+                        </div>
+                        <span className="text-white font-medium text-sm lg:text-base">Suporte por email</span>
+                      </div>
+                    </>
+                  )}
+                  
+                  {planData.name === 'Plano Pro' && (
+                    <>
+                      <div className="flex items-center gap-3 lg:gap-4 p-3 lg:p-4 bg-white/5 rounded-xl lg:rounded-2xl hover:bg-white/10 transition-colors">
+                        <div className="w-8 h-8 lg:w-10 lg:h-10 bg-[#FF3002]/20 rounded-lg lg:rounded-xl flex items-center justify-center">
+                          <CheckCircle className="w-4 h-4 lg:w-5 lg:h-5 text-[#FF3002]" />
+                        </div>
+                        <span className="text-white font-medium text-sm lg:text-base">15 análises por dia</span>
+                      </div>
+                      <div className="flex items-center gap-3 lg:gap-4 p-3 lg:p-4 bg-white/5 rounded-xl lg:rounded-2xl hover:bg-white/10 transition-colors">
+                        <div className="w-8 h-8 lg:w-10 lg:h-10 bg-[#FF3002]/20 rounded-lg lg:rounded-xl flex items-center justify-center">
+                          <CheckCircle className="w-4 h-4 lg:w-5 lg:h-5 text-[#FF3002]" />
+                        </div>
+                        <span className="text-white font-medium text-sm lg:text-base">Algoritmo avançado</span>
+                      </div>
+                      <div className="flex items-center gap-3 lg:gap-4 p-3 lg:p-4 bg-white/5 rounded-xl lg:rounded-2xl hover:bg-white/10 transition-colors">
+                        <div className="w-8 h-8 lg:w-10 lg:h-10 bg-[#FF3002]/20 rounded-lg lg:rounded-xl flex items-center justify-center">
+                          <CheckCircle className="w-4 h-4 lg:w-5 lg:h-5 text-[#FF3002]" />
+                        </div>
+                        <span className="text-white font-medium text-sm lg:text-base">Alertas em tempo real</span>
+                      </div>
+                      <div className="flex items-center gap-3 lg:gap-4 p-3 lg:p-4 bg-white/5 rounded-xl lg:rounded-2xl hover:bg-white/10 transition-colors">
+                        <div className="w-8 h-8 lg:w-10 lg:h-10 bg-[#FF3002]/20 rounded-lg lg:rounded-xl flex items-center justify-center">
+                          <CheckCircle className="w-4 h-4 lg:w-5 lg:h-5 text-[#FF3002]" />
+                        </div>
+                        <span className="text-white font-medium text-sm lg:text-base">Suporte 24 horas</span>
+                      </div>
+                    </>
+                  )}
+                  
+                  {planData.name === 'Plano Premium' && (
+                    <>
+                      <div className="flex items-center gap-3 lg:gap-4 p-3 lg:p-4 bg-white/5 rounded-xl lg:rounded-2xl hover:bg-white/10 transition-colors">
+                        <div className="w-8 h-8 lg:w-10 lg:h-10 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-lg lg:rounded-xl flex items-center justify-center">
+                          <CheckCircle className="w-4 h-4 lg:w-5 lg:h-5 text-purple-400" />
+                        </div>
+                        <span className="text-white font-medium text-sm lg:text-base">Análises ilimitadas</span>
+                      </div>
+                      <div className="flex items-center gap-3 lg:gap-4 p-3 lg:p-4 bg-white/5 rounded-xl lg:rounded-2xl hover:bg-white/10 transition-colors">
+                        <div className="w-8 h-8 lg:w-10 lg:h-10 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-lg lg:rounded-xl flex items-center justify-center">
+                          <CheckCircle className="w-4 h-4 lg:w-5 lg:h-5 text-purple-400" />
+                        </div>
+                        <span className="text-white font-medium text-sm lg:text-base">IA premium</span>
+                      </div>
+                      <div className="flex items-center gap-3 lg:gap-4 p-3 lg:p-4 bg-white/5 rounded-xl lg:rounded-2xl hover:bg-white/10 transition-colors">
+                        <div className="w-8 h-8 lg:w-10 lg:h-10 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-lg lg:rounded-xl flex items-center justify-center">
+                          <CheckCircle className="w-4 h-4 lg:w-5 lg:h-5 text-purple-400" />
+                        </div>
+                        <span className="text-white font-medium text-sm lg:text-base">Alertas personalizados</span>
+                      </div>
+                      <div className="flex items-center gap-3 lg:gap-4 p-3 lg:p-4 bg-white/5 rounded-xl lg:rounded-2xl hover:bg-white/10 transition-colors">
+                        <div className="w-8 h-8 lg:w-10 lg:h-10 bg-gradient-to-br from-purple-500/20 to-pink-500/20 rounded-lg lg:rounded-xl flex items-center justify-center">
+                          <CheckCircle className="w-4 h-4 lg:w-5 lg:h-5 text-purple-400" />
+                        </div>
+                        <span className="text-white font-medium text-sm lg:text-base">Suporte prioritário</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Lado Direito - Resumo e Pagamento */}
+            <div className="space-y-6 lg:space-y-8">
+              
+              {/* Campo de Cupom com design premium */}
+              <div className="group bg-gradient-to-br from-black/60 via-black/40 to-black/60 backdrop-blur-xl rounded-2xl lg:rounded-3xl p-6 lg:p-8 border border-white/10 hover:border-[#FF3002]/30 transition-all duration-500 hover:shadow-2xl hover:shadow-[#FF3002]/10">
+                <div className="flex items-center gap-3 mb-4 lg:mb-6">
+                  <div className="w-8 h-8 lg:w-10 lg:h-10 bg-[#FF3002]/20 rounded-lg lg:rounded-xl flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4 lg:w-5 lg:h-5 text-[#FF3002]" />
+                  </div>
+                  <h3 className="text-lg lg:text-xl font-bold text-white">Código de Cupom</h3>
+                </div>
+                <div className="flex flex-col sm:flex-row gap-3 lg:gap-4">
+                  <input
+                    type="text"
+                    value={checkoutCouponCode}
+                    onChange={(e) => setCheckoutCouponCode(e.target.value.toUpperCase())}
+                    placeholder="Digite seu cupom (ex: AKEJR)"
+                    className="flex-1 bg-white/10 border border-white/20 rounded-xl lg:rounded-2xl px-4 lg:px-6 py-3 lg:py-4 text-white placeholder-gray-400 focus:outline-none focus:border-[#FF3002] focus:ring-2 focus:ring-[#FF3002]/20 transition-all duration-300 text-sm lg:text-base"
+                  />
+                  <button 
+                    onClick={() => applyCheckoutCoupon(checkoutCouponCode)}
+                    className="bg-gradient-to-r from-[#FF3002] to-[#E02702] hover:from-[#E02702] hover:to-[#C01F02] text-white px-4 lg:px-8 py-3 lg:py-4 rounded-xl lg:rounded-2xl font-semibold transition-all duration-300 hover:shadow-lg hover:shadow-[#FF3002]/30 transform hover:scale-105 text-sm lg:text-base"
+                  >
+                    Aplicar
+                  </button>
+                </div>
+                
+                {checkoutCouponDiscount > 0 && (
+                  <div className="mt-3 flex items-center gap-2 text-green-400">
+                    <CheckCircle className="w-4 h-4" />
+                    <span className="text-sm">Cupom aplicado! {checkoutCouponDiscount}% de desconto</span>
+                  </div>
+                )}
+                
+                <p className="text-gray-400 text-xs lg:text-sm mt-3 lg:mt-4">Se tiver um cupom, digite aqui</p>
+              </div>
+
+              {/* Resumo do Pedido com design premium */}
+              <div className="group bg-gradient-to-br from-black/60 via-black/40 to-black/60 backdrop-blur-xl rounded-2xl lg:rounded-3xl p-6 lg:p-8 border border-white/10 hover:border-[#FF3002]/30 transition-all duration-500 hover:shadow-2xl hover:shadow-[#FF3002]/10">
+                <div className="flex items-center gap-3 mb-4 lg:mb-6">
+                  <div className="w-8 h-8 lg:w-10 lg:h-10 bg-[#FF3002]/20 rounded-lg lg:rounded-xl flex items-center justify-center">
+                    <BarChart3 className="w-4 h-4 lg:w-5 lg:h-5 text-[#FF3002]" />
+                  </div>
+                  <h3 className="text-lg lg:text-xl font-bold text-white">Resumo do Pedido</h3>
+                </div>
+                
+                <div className="space-y-3 lg:space-y-4">
+                  <div className="flex justify-between items-center p-3 lg:p-4 bg-white/5 rounded-xl lg:rounded-2xl">
+                    <span className="text-white font-medium text-sm lg:text-base">{planData.name}</span>
+                    <span className="text-white font-bold text-base lg:text-lg">R$ {(planData.price / 100).toFixed(2)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center p-3 lg:p-4 bg-green-500/10 rounded-xl lg:rounded-2xl">
+                    <span className="text-green-400 font-medium text-sm lg:text-base">
+                      Desconto {checkoutCouponDiscount > 0 ? `(${checkoutCouponDiscount}%)` : ''}
+                    </span>
+                    <span className="text-green-400 font-bold text-base lg:text-lg">-R$ {(discountAmount / 100).toFixed(2)}</span>
+                  </div>
+                  
+                  <div className="h-px bg-gradient-to-r from-transparent via-white/20 to-transparent my-4 lg:my-6"></div>
+                  
+                  <div className="flex justify-between items-center p-4 lg:p-6 bg-gradient-to-r from-[#FF3002]/10 to-[#E02702]/10 rounded-xl lg:rounded-2xl border border-[#FF3002]/20">
+                    <span className="text-white font-bold text-lg lg:text-xl">Total</span>
+                    <span className="text-[#FF3002] font-bold text-xl lg:text-2xl">R$ {(finalPrice / 100).toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botão de Confirmação com design premium */}
+              <button
+                onClick={() => {
+                  const { orderId, paymentUrl } = createPlanPayment(planData.name, planData.price);
+                  localStorage.setItem('currentOrder', JSON.stringify({
+                    orderId,
+                    planName: planData.name,
+                    planPrice: planData.price,
+                    timestamp: Date.now()
+                  }));
+                  openCheckout(paymentUrl);
+                }}
+                className="group w-full bg-gradient-to-r from-[#FF3002] via-[#E02702] to-[#C01F02] hover:from-[#C01F02] hover:via-[#E02702] hover:to-[#FF3002] text-white py-4 lg:py-6 rounded-2xl lg:rounded-3xl font-bold text-lg lg:text-xl transition-all duration-500 hover:shadow-2xl hover:shadow-[#FF3002]/40 transform hover:scale-105 relative overflow-hidden"
+              >
+                <div className="absolute inset-0 bg-gradient-to-r from-white/0 via-white/20 to-white/0 transform -skew-x-12 -translate-x-full group-hover:translate-x-full transition-transform duration-1000"></div>
+                <span className="relative z-10 flex items-center justify-center gap-2 lg:gap-3">
+                  <Target className="w-5 h-5 lg:w-6 lg:h-6" />
+                  Confirmar e Pagar
+                </span>
+              </button>
+              
+              <div className="text-center space-y-3">
+                <div className="flex items-center justify-center gap-2 text-green-400">
+                  <CheckCircle className="w-5 h-5" />
+                  <span className="text-sm font-medium">Pagamento 100% seguro</span>
+                </div>
+                <p className="text-gray-400 text-sm">
+                  Você será redirecionado para a página segura de pagamento
+                </p>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Notificação personalizada */}
+        {showCheckoutNotification && (
+          <div className="fixed top-4 right-4 z-50 animate-in slide-in-from-right duration-300">
+            <div className={`rounded-xl p-4 shadow-2xl border backdrop-blur-xl max-w-sm ${
+              checkoutNotificationType === 'success' 
+                ? 'bg-green-500/20 border-green-500/30 text-green-100'
+                : 'bg-red-500/20 border-red-500/30 text-red-100'
+            }`}>
+              <div className="flex items-center space-x-3">
+                <div className={`w-2 h-2 rounded-full ${
+                  checkoutNotificationType === 'success' 
+                    ? 'bg-green-400'
+                    : 'bg-red-400'
+                }`}></div>
+                <p className="font-medium">{checkoutNotificationMessage}</p>
+                <button
+                  onClick={() => setShowCheckoutNotification(false)}
+                  className="text-gray-400 hover:text-white transition-colors ml-auto"
+                >
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
+
+
 
   // Verificar se usuário está logado para rota protegida
   const checkUserAuth = () => {
@@ -417,7 +743,18 @@ function App() {
   const [showAnalysis, setShowAnalysis] = useState(false);
   const [generatingBets, setGeneratingBets] = useState(false);
   const [currentBetIndex, setCurrentBetIndex] = useState(0);
+  
+  // Estados para checkout
+  const [showCheckout, setShowCheckout] = useState(false);
+  const [selectedPlan, setSelectedPlan] = useState<{name: string, price: number, originalPrice?: number} | null>(null);
+  const [couponCode, setCouponCode] = useState('');
+  const [couponDiscount, setCouponDiscount] = useState(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+
+  // Monitor mudanças no couponDiscount
+  useEffect(() => {
+    console.log('🔄 couponDiscount mudou para:', couponDiscount);
+  }, [couponDiscount]);
   
   // Estados para autenticação de usuários
   const [isUserLoggedIn, setIsUserLoggedIn] = useState(() => {
@@ -491,20 +828,196 @@ function App() {
     window.location.href = '/';
   };
 
-  const handlePlanPayment = (planName: string, planPrice: number) => {
+  const handlePlanSelection = (planName: string, planPrice: number) => {
+    // Salvar plano selecionado no localStorage
+    const planData = { name: planName, price: planPrice };
+    localStorage.setItem('selectedPlan', JSON.stringify(planData));
+    
+    // Redirecionar para a página de checkout
+    window.location.href = '/checkout';
+  };
+
+  const applyCoupon = async (code: string) => {
+    console.log('🎯 applyCoupon chamado com código:', code);
+    
+    if (!code.trim()) {
+      console.log('❌ Código do cupom está vazio');
+      return false;
+    }
+
+    try {
+      console.log('🔍 Buscando cupom:', code.toUpperCase());
+      console.log('🔗 Supabase disponível:', !!supabase);
+      
+      // Testar conexão com supabase primeiro
+      const { data: testData, error: testError } = await supabase
+        .from('coupons')
+        .select('count(*)')
+        .limit(1);
+      
+      console.log('🧪 Teste de conexão:', { testData, testError });
+      
+      // Buscar cupom no banco de dados
+      const { data, error } = await supabase
+        .from('coupons')
+        .select('*')
+        .eq('code', code.toUpperCase())
+        .eq('is_active', true)
+        .single();
+
+      console.log('📊 Resultado da busca:', { data, error });
+
+      if (error) {
+        console.log('❌ Erro na busca:', error);
+        return false;
+      }
+
+      if (!data) {
+        console.log('❌ Cupom não encontrado:', code);
+        return false;
+      }
+
+      // Aplicar desconto do cupom
+      console.log('💰 Aplicando desconto:', data.discount_percentage + '%');
+      console.log('🔄 Estado anterior couponDiscount:', couponDiscount);
+      
+      setCouponDiscount(data.discount_percentage);
+      
+      console.log(`✅ Cupom aplicado: ${data.name} - ${data.discount_percentage}% de desconto`);
+      return true;
+    } catch (error) {
+      console.error('❌ Erro geral ao aplicar cupom:', error);
+      return false;
+    }
+  };
+
+  const handlePlanPayment = (planName: string, finalPrice: number) => {
     // Criar link de pagamento para o plano selecionado
-    const { orderId, paymentUrl } = createPlanPayment(planName, planPrice);
+    const { orderId, paymentUrl } = createPlanPayment(planName, finalPrice);
     
     // Salvar informações do pedido no localStorage para verificação posterior
     localStorage.setItem('currentOrder', JSON.stringify({
       orderId,
       planName,
-      planPrice,
+      planPrice: finalPrice,
       timestamp: Date.now()
     }));
     
     // Abrir checkout da InfinitePay
     openCheckout(paymentUrl);
+  };
+
+  // Função para verificar e renovar créditos diários
+  const checkAndRenewDailyCredits = async (userId: string) => {
+    try {
+      console.log('🔄 Verificando renovação diária de créditos para usuário:', userId);
+      
+      // Buscar dados do usuário
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .eq('status', 'active')
+        .single();
+
+      if (error || !data) {
+        console.error('❌ Erro ao buscar dados do usuário:', error);
+        return;
+      }
+
+      // Verificar se é usuário Premium (não precisa renovar)
+      if (data.plan === 'Premium') {
+        console.log('👑 Usuário Premium - créditos ilimitados');
+        return;
+      }
+
+      // Verificar se precisa renovar créditos (baseado na data de atualização)
+      const lastUpdate = new Date(data.updated_at);
+      const now = new Date();
+      const daysSinceUpdate = Math.floor((now.getTime() - lastUpdate.getTime()) / (1000 * 60 * 60 * 24));
+
+      console.log('📅 Dias desde última atualização:', daysSinceUpdate);
+      console.log('📅 Última atualização:', lastUpdate.toLocaleDateString());
+      console.log('📅 Data atual:', now.toLocaleDateString());
+
+      if (daysSinceUpdate >= 1) {
+        console.log('🔄 Renovando créditos diários...');
+        
+        // Determinar quantos créditos renovar baseado no plano
+        let newCredits = 0;
+        if (data.plan === 'Básico') {
+          newCredits = 7;
+        } else if (data.plan === 'Pro') {
+          newCredits = 15;
+        }
+
+        // Atualizar créditos no banco
+        const { error: updateError } = await supabase
+          .from('users')
+          .update({ 
+            credits: newCredits,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', userId);
+
+        if (updateError) {
+          console.error('❌ Erro ao renovar créditos:', updateError);
+        } else {
+          console.log(`✅ Créditos renovados para ${newCredits} (plano: ${data.plan})`);
+          
+          // Atualizar estado local
+          setCurrentUser((prev: any) => prev ? { ...prev, credits: newCredits } : null);
+          
+          // Atualizar localStorage
+          const updatedUser = { ...data, credits: newCredits };
+          localStorage.setItem('userAuth', JSON.stringify({
+            user: updatedUser,
+            timestamp: Date.now()
+          }));
+        }
+      } else {
+        console.log('✅ Créditos ainda válidos para hoje');
+      }
+    } catch (error) {
+      console.error('❌ Erro ao verificar renovação diária:', error);
+    }
+  };
+
+  // Função para sincronizar dados do usuário com o banco
+  const syncUserData = async (userId: string) => {
+    try {
+      console.log('🔄 Sincronizando dados do usuário:', userId);
+      
+      // Primeiro verificar e renovar créditos se necessário
+      await checkAndRenewDailyCredits(userId);
+      
+      const { data, error } = await supabase
+        .from('users')
+        .select('*')
+        .eq('id', userId)
+        .eq('status', 'active')
+        .single();
+
+      if (error || !data) {
+        console.log('❌ Erro ao sincronizar usuário:', error);
+        return;
+      }
+
+      console.log('✅ Dados sincronizados:', data);
+      
+      // Atualizar estado local
+      setCurrentUser(data);
+      
+      // Atualizar localStorage com dados frescos
+      localStorage.setItem('userAuth', JSON.stringify({
+        user: data,
+        timestamp: Date.now()
+      }));
+      
+      return data;
+    } catch (error) {
+      console.error('❌ Erro na sincronização:', error);
+    }
   };
 
   // Verificar se usuário já está logado
@@ -515,6 +1028,11 @@ function App() {
       if (Date.now() - authData.timestamp < 24 * 60 * 60 * 1000) {
         setIsUserLoggedIn(true);
         setCurrentUser(authData.user);
+        
+        // Sincronizar dados com o banco em tempo real
+        if (authData.user?.id) {
+          syncUserData(authData.user.id);
+        }
         
         // Se usuário está logado e na rota de análise, mostrar a interface de busca
         if (isAnalyzeRoute) {
@@ -577,8 +1095,8 @@ function App() {
 
 
   // Estados para swipe em mobile
-  const [touchStart, setTouchStart] = useState<number | null>(null);
-  const [touchEnd, setTouchEnd] = useState<number | null>(null);
+  const [touchStart, setTouchStart] = useState<{ x: number; y: number } | null>(null);
+  const [touchEnd, setTouchEnd] = useState<{ x: number; y: number } | null>(null);
 
   const API_KEY = 'd31b89f86f53e645e951db4a6af1a4d4';
 
@@ -3517,49 +4035,91 @@ function App() {
   const handleGenerateBets = useCallback(async () => {
     if (!selectedFixture || !gameAnalysis) return;
     
-    setGeneratingBets(true);
-    
+    // Verificar se usuário está logado
+    if (!currentUser) {
+      setError('Usuário não autenticado');
+      return;
+    }
+
+    // Verificar créditos antes de gerar apostas
     try {
-      // Buscar dados dos últimos jogos novamente para o gerador
-      const [homeLastMatches, awayLastMatches] = await Promise.all([
-        getTeamLastMatches(selectedFixture.teams.home.id),
-        getTeamLastMatches(selectedFixture.teams.away.id)
-      ]);
+      console.log('🔍 Verificando créditos para usuário:', currentUser.id);
+      const { hasCredits, creditsLeft, plan } = await checkUserCredits(currentUser.id);
+      console.log('🔍 Resultado da verificação:', { hasCredits, creditsLeft, plan });
       
-      const homeForm = analyzeRecentForm(homeLastMatches, selectedFixture.teams.home.id);
-      const awayForm = analyzeRecentForm(awayLastMatches, selectedFixture.teams.away.id);
-      
-      const allBetSuggestions = await generateBetSuggestions(
-        selectedFixture, 
-        gameAnalysis, 
-        homeForm, 
-        awayForm, 
-        homeLastMatches, 
-        awayLastMatches,
-        gameAnalysis.homeStats || null,
-        gameAnalysis.awayStats || null
-      );
-      
-      // SEMPRE gerar todas as apostas disponíveis (sem filtro de "usadas")
-      const availableBets = allBetSuggestions;
-      
-      if (availableBets.length > 0) {
-        setGameAnalysis(prev => prev ? { ...prev, betSuggestions: availableBets } : null);
-        setCurrentBetIndex(0); // Resetar para primeira aposta
-        setTotalBetsGenerated(availableBets.length); // Definir total de apostas
-        
-        console.log(`✅ Geradas ${availableBets.length} apostas para ${selectedFixture.teams.home.name} vs ${selectedFixture.teams.away.name}`);
-      } else {
-        console.log('⚠️ Nenhuma aposta foi gerada - critérios muito rigorosos');
+      if (!hasCredits && plan !== 'Premium') {
+        console.log('❌ Usuário sem créditos disponíveis');
+        setError(`❌ Sem créditos disponíveis! Você tem ${creditsLeft} créditos restantes. Troque o plano ou espere amanhã.`);
+        return;
       }
       
+      console.log('✅ Usuário pode gerar apostas. Créditos:', creditsLeft, 'Plano:', plan);
+
+      setGeneratingBets(true);
+      
+      try {
+        // Buscar dados dos últimos jogos novamente para o gerador
+        const [homeLastMatches, awayLastMatches] = await Promise.all([
+          getTeamLastMatches(selectedFixture.teams.home.id),
+          getTeamLastMatches(selectedFixture.teams.away.id)
+        ]);
+        
+        const homeForm = analyzeRecentForm(homeLastMatches, selectedFixture.teams.home.id);
+        const awayForm = analyzeRecentForm(awayLastMatches, selectedFixture.teams.away.id);
+        
+        const allBetSuggestions = await generateBetSuggestions(
+          selectedFixture, 
+          gameAnalysis, 
+          homeForm, 
+          awayForm, 
+          homeLastMatches, 
+          awayLastMatches,
+          gameAnalysis.homeStats || null,
+          gameAnalysis.awayStats || null
+        );
+        
+        // SEMPRE gerar todas as apostas disponíveis (sem filtro de "usadas")
+        const availableBets = allBetSuggestions;
+        
+        if (availableBets.length > 0) {
+          setGameAnalysis(prev => prev ? { ...prev, betSuggestions: availableBets } : null);
+          setCurrentBetIndex(0); // Resetar para primeira aposta
+          setTotalBetsGenerated(availableBets.length); // Definir total de apostas
+          
+          // Descontar crédito após gerar apostas com sucesso
+          if (plan !== 'Premium') {
+            console.log('🔍 Iniciando desconto de crédito para usuário não-Premium');
+            const deductionResult = await deductUserCredit(currentUser.id);
+            console.log('🔍 Resultado do desconto:', deductionResult);
+            
+            if (deductionResult.success) {
+              // Atualizar usuário local com novos créditos
+              setCurrentUser((prev: any) => prev ? { ...prev, credits: deductionResult.creditsLeft } : null);
+              console.log(`✅ Crédito descontado por gerar apostas. Restam: ${deductionResult.creditsLeft} créditos`);
+            } else {
+              console.error('❌ Erro ao descontar crédito:', deductionResult.error);
+            }
+          } else {
+            console.log('💎 Usuário Premium - sem desconto de créditos');
+          }
+          
+          console.log(`✅ Geradas ${availableBets.length} apostas para ${selectedFixture.teams.home.name} vs ${selectedFixture.teams.away.name}`);
+        } else {
+          console.log('⚠️ Nenhuma aposta foi gerada - critérios muito rigorosos');
+        }
+        
+      } catch (error) {
+        console.error('Erro ao gerar apostas:', error);
+        setError('Erro ao gerar sugestões de apostas');
+      } finally {
+        setGeneratingBets(false);
+      }
     } catch (error) {
-      console.error('Erro ao gerar apostas:', error);
-      setError('Erro ao gerar sugestões de apostas');
-    } finally {
+      console.error('Erro ao verificar créditos:', error);
+      setError('Erro ao verificar créditos disponíveis');
       setGeneratingBets(false);
     }
-  }, [selectedFixture, gameAnalysis, generateBetSuggestions, getTeamLastMatches, analyzeRecentForm]);
+  }, [selectedFixture, gameAnalysis, generateBetSuggestions, getTeamLastMatches, analyzeRecentForm, currentUser]);
 
   // Funções de navegação entre apostas
   const handlePreviousBet = useCallback(() => {
@@ -3596,33 +4156,269 @@ function App() {
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [showAnalysis, gameAnalysis?.betSuggestions, handlePreviousBet, handleNextBet]);
 
-  // Funções para swipe em mobile
+  // Funções para swipe em mobile (melhoradas para evitar conflito com scroll)
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     setTouchEnd(null);
-    setTouchStart(e.targetTouches[0].clientX);
+    setTouchStart({
+      x: e.targetTouches[0].clientX,
+      y: e.targetTouches[0].clientY
+    });
   }, []);
 
   const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    setTouchEnd(e.targetTouches[0].clientX);
+    setTouchEnd({
+      x: e.targetTouches[0].clientX,
+      y: e.targetTouches[0].clientY
+    });
   }, []);
 
   const handleTouchEnd = useCallback(() => {
     if (!touchStart || !touchEnd) return;
     
-    const distance = touchStart - touchEnd;
-    const isLeftSwipe = distance > 50;
-    const isRightSwipe = distance < -50;
+    const deltaX = touchStart.x - touchEnd.x;
+    const deltaY = touchStart.y - touchEnd.y;
+    const absDeltaX = Math.abs(deltaX);
+    const absDeltaY = Math.abs(deltaY);
+    
+    // Só processar swipe horizontal se o movimento horizontal for maior que o vertical
+    // e se o movimento horizontal for significativo (>50px)
+    if (absDeltaX > absDeltaY && absDeltaX > 50) {
+      const isLeftSwipe = deltaX > 0;
+      const isRightSwipe = deltaX < 0;
 
-    if (isLeftSwipe && gameAnalysis?.betSuggestions && currentBetIndex < gameAnalysis.betSuggestions.length - 1) {
-      handleNextBet();
+      if (isLeftSwipe && gameAnalysis?.betSuggestions && currentBetIndex < gameAnalysis.betSuggestions.length - 1) {
+        handleNextBet();
+      }
+      if (isRightSwipe && gameAnalysis?.betSuggestions && currentBetIndex > 0) {
+        handlePreviousBet();
+      }
     }
-    if (isRightSwipe && gameAnalysis?.betSuggestions && currentBetIndex > 0) {
-      handlePreviousBet();
-    }
+    // Se o movimento vertical for maior, deixar o scroll normal funcionar
   }, [touchStart, touchEnd, gameAnalysis?.betSuggestions, currentBetIndex, handleNextBet, handlePreviousBet]);
+
+  // Página de Checkout (modal interno)
+  if (showCheckout && selectedPlan) {
+    const discountAmount = (selectedPlan.price * couponDiscount / 100);
+    const finalPrice = selectedPlan.price - discountAmount;
+    
+    // Debug dos valores
+    console.log('💰 Checkout - Valores:', {
+      planPrice: selectedPlan.price,
+      couponDiscount: couponDiscount,
+      discountAmount: discountAmount,
+      finalPrice: finalPrice,
+      planPriceInReais: selectedPlan.price / 100,
+      discountAmountInReais: discountAmount / 100,
+      finalPriceInReais: finalPrice / 100
+    });
+    
+    return (
+      <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white">
+        {/* Header */}
+        <header className="py-6 px-4 sm:px-6 lg:px-8 border-b border-white/10 bg-black/50 backdrop-blur-xl">
+          <div className="container mx-auto flex items-center justify-between">
+            <button 
+              onClick={() => setShowCheckout(false)}
+              className="flex items-center gap-2 text-gray-400 hover:text-white transition-colors"
+            >
+              <ArrowLeft className="w-5 h-5" />
+              Voltar
+            </button>
+            <h1 className="text-2xl font-bold text-[#FF3002]">Checkout</h1>
+            <div className="w-20"></div> {/* Spacer */}
+          </div>
+        </header>
+
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 py-8">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 max-w-6xl mx-auto">
+            
+            {/* Lado Esquerdo - Detalhes do Plano */}
+            <div className="space-y-6">
+              <div className="bg-gradient-to-br from-[#FF3002]/20 via-black/60 to-[#FF3002]/10 backdrop-blur-xl rounded-2xl p-6 border border-[#FF3002]/30">
+                <h2 className="text-2xl font-bold mb-4 text-[#FF3002]">{selectedPlan.name}</h2>
+                
+                <div className="space-y-4">
+                  {selectedPlan.name === 'Plano Básico' && (
+                    <>
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                        <span className="text-white">7 análises por dia</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                        <span className="text-white">Algoritmo básico</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="w-5 h-5 text-green-400 flex-shrink-0" />
+                        <span className="text-white">Suporte por email</span>
+                      </div>
+                    </>
+                  )}
+                  
+                  {selectedPlan.name === 'Plano Pro' && (
+                    <>
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="w-5 h-5 text-[#FF3002] flex-shrink-0" />
+                        <span className="text-white">15 análises por dia</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="w-5 h-5 text-[#FF3002] flex-shrink-0" />
+                        <span className="text-white">Algoritmo avançado</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="w-5 h-5 text-[#FF3002] flex-shrink-0" />
+                        <span className="text-white">Alertas em tempo real</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="w-5 h-5 text-[#FF3002] flex-shrink-0" />
+                        <span className="text-white">Suporte 24 horas</span>
+                      </div>
+                    </>
+                  )}
+                  
+                  {selectedPlan.name === 'Plano Premium' && (
+                    <>
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="w-5 h-5 text-[#FF3002] flex-shrink-0" />
+                        <span className="text-white">Análises ilimitadas</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="w-5 h-5 text-[#FF3002] flex-shrink-0" />
+                        <span className="text-white">IA premium</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="w-5 h-5 text-[#FF3002] flex-shrink-0" />
+                        <span className="text-white">Alertas personalizados</span>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <CheckCircle className="w-5 h-5 text-[#FF3002] flex-shrink-0" />
+                        <span className="text-white">Suporte prioritário</span>
+                      </div>
+                    </>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Lado Direito - Resumo e Pagamento */}
+            <div className="space-y-6">
+              
+              {/* Campo de Cupom */}
+              <div className="bg-black/40 backdrop-blur-xl rounded-2xl p-6 border border-white/10">
+                <h3 className="text-lg font-semibold mb-4 text-white">Código de Cupom</h3>
+                <div className="flex gap-3">
+                  <input
+                    type="text"
+                    value={couponCode}
+                    onChange={(e) => setCouponCode(e.target.value.toUpperCase())}
+                    placeholder="Digite seu cupom"
+                    className="flex-1 bg-white/10 border border-white/20 rounded-xl px-4 py-3 text-white placeholder-gray-400 focus:outline-none focus:border-[#FF3002] focus:ring-2 focus:ring-[#FF3002]/20"
+                  />
+                  <button
+                    onClick={async (e) => {
+                      e.preventDefault();
+                      console.log('🔘 Botão Aplicar clicado!');
+                      console.log('📝 Código atual:', couponCode);
+                      
+                      if (!couponCode.trim()) {
+                        alert('Digite um código de cupom!');
+                        return;
+                      }
+                      
+                      // Teste simples primeiro
+                      console.log('🧪 Testando setCouponDiscount diretamente...');
+                      setCouponDiscount(10);
+                      console.log('✅ Desconto definido para 10% (teste)');
+                      
+                      // Depois aplicar o cupom real
+                      setTimeout(async () => {
+                        const result = await applyCoupon(couponCode);
+                        console.log('📊 Resultado final:', result);
+                      }, 100);
+                    }}
+                    className="bg-[#FF3002] hover:bg-[#E02702] text-white px-6 py-3 rounded-xl font-semibold transition-colors"
+                  >
+                    Aplicar
+                  </button>
+                </div>
+                
+                {couponDiscount > 0 && (
+                  <div className="mt-3 flex items-center gap-2 text-green-400">
+                    <CheckCircle className="w-4 h-4" />
+                    <span className="text-sm">Cupom aplicado! {couponDiscount}% de desconto</span>
+                  </div>
+                )}
+              </div>
+
+              {/* Resumo do Pedido */}
+              <div className="bg-black/40 backdrop-blur-xl rounded-2xl p-6 border border-white/10">
+                <h3 className="text-lg font-semibold mb-4 text-white">Resumo do Pedido</h3>
+                
+                <div className="space-y-3">
+                  <div className="flex justify-between text-white">
+                    <span>{selectedPlan.name}</span>
+                    <span>R$ {(selectedPlan.price / 100).toFixed(2)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between text-green-400">
+                    <span>Desconto {couponDiscount > 0 ? `(${couponDiscount}%)` : ''}</span>
+                    <span>-R$ {(discountAmount / 100).toFixed(2)}</span>
+                  </div>
+                  
+                  <hr className="border-white/20" />
+                  
+                  <div className="flex justify-between text-xl font-bold text-[#FF3002]">
+                    <span>Total</span>
+                    <span>R$ {(finalPrice / 100).toFixed(2)}</span>
+                  </div>
+                </div>
+              </div>
+
+              {/* Botão de Confirmação */}
+              <button
+                onClick={() => handlePlanPayment(selectedPlan.name, Math.round(finalPrice))}
+                className="w-full bg-gradient-to-r from-[#FF3002] to-[#E02702] hover:from-[#E02702] hover:to-[#C01F02] text-white py-4 rounded-xl font-bold text-lg transition-all duration-300 hover:shadow-2xl hover:shadow-[#FF3002]/30 transform hover:scale-105"
+              >
+                Confirmar e Pagar
+              </button>
+              
+              <p className="text-center text-gray-400 text-sm">
+                Você será redirecionado para a página segura de pagamento
+              </p>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   // Função para analisar jogo específico
   const handleFixtureAnalysis = useCallback(async (fixture: Fixture) => {
+    // Verificar se usuário está logado
+    if (!currentUser) {
+      setError('Usuário não autenticado');
+      return;
+    }
+
+    // Verificar créditos antes de permitir análise
+    try {
+      console.log('🔍 Verificando créditos antes da análise para usuário:', currentUser.id);
+      const { hasCredits, creditsLeft, plan } = await checkUserCredits(currentUser.id);
+      console.log('🔍 Resultado da verificação:', { hasCredits, creditsLeft, plan });
+      
+      if (!hasCredits && plan !== 'Premium') {
+        console.log('❌ Usuário sem créditos - bloqueando análise');
+        setError(`❌ Sem créditos disponíveis! Você tem ${creditsLeft} créditos restantes. Troque o plano ou espere amanhã.`);
+        return;
+      }
+      
+      console.log('✅ Usuário pode analisar. Créditos:', creditsLeft, 'Plano:', plan);
+    } catch (error) {
+      console.error('❌ Erro ao verificar créditos:', error);
+      setError('Erro ao verificar créditos disponíveis');
+      return;
+    }
+
     setSelectedFixture(fixture);
     setLoading(true);
     setShowResults(false); // Fechar dropdown
@@ -3645,7 +4441,7 @@ function App() {
     } finally {
       setLoading(false);
     }
-  }, [analyzeGame]);
+  }, [analyzeGame, currentUser]);
 
 
 
@@ -3815,6 +4611,19 @@ function App() {
     setShowResults(false);
   }, []);
 
+  // Effect para fechar dropdown quando clicar fora
+  useEffect(() => {
+    const handleDocumentClick = (event: MouseEvent) => {
+      const target = event.target as Element;
+      if (showResults && !target.closest('.search-container')) {
+        setShowResults(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleDocumentClick);
+    return () => document.removeEventListener('mousedown', handleDocumentClick);
+  }, [showResults]);
+
   // Função para voltar para lista de times
   const handleBackToTeams = useCallback(() => {
     setSelectedTeam(null);
@@ -3926,8 +4735,19 @@ function App() {
               {fixtures.map((fixture) => (
                 <div 
                   key={fixture.fixture.id}
-                  onClick={() => handleFixtureAnalysis(fixture)}
-                  className="bg-[#2a2a2a] rounded-lg p-4 hover:bg-[#3a3a3a] transition-colors duration-300 cursor-pointer border border-transparent hover:border-[#FF3002]/30"
+                  onClick={() => {
+                    // Verificar se usuário tem créditos antes de permitir análise
+                    if (currentUser && currentUser.plan !== 'Premium' && currentUser.credits <= 0) {
+                      setError(`❌ Sem créditos disponíveis! Você tem ${currentUser.credits} créditos restantes. Troque o plano ou espere amanhã.`);
+                      return;
+                    }
+                    handleFixtureAnalysis(fixture);
+                  }}
+                  className={`rounded-lg p-4 transition-colors duration-300 border border-transparent ${
+                    currentUser && currentUser.plan !== 'Premium' && currentUser.credits <= 0
+                      ? 'bg-gray-700 cursor-not-allowed opacity-60'
+                      : 'bg-[#2a2a2a] hover:bg-[#3a3a3a] cursor-pointer hover:border-[#FF3002]/30'
+                  }`}
                 >
                   <div className="flex items-center justify-between mb-3">
                     <span className="text-sm text-gray-400 flex items-center">
@@ -3980,8 +4800,15 @@ function App() {
                         {fixture.fixture.venue.city && `, ${fixture.fixture.venue.city}`}
                       </div>
                     )}
-                    <div className="text-xs text-[#FF3002] font-medium">
-                      🔍 Analisar Jogo
+                    <div className={`text-xs font-medium ${
+                      currentUser && currentUser.plan !== 'Premium' && currentUser.credits <= 0
+                        ? 'text-gray-500'
+                        : 'text-[#FF3002]'
+                    }`}>
+                      {currentUser && currentUser.plan !== 'Premium' && currentUser.credits <= 0
+                        ? '❌ Sem créditos'
+                        : '🔍 Analisar Jogo'
+                      }
                     </div>
                   </div>
                 </div>
@@ -4071,7 +4898,7 @@ function App() {
 
             <div className="flex items-center space-x-2 sm:space-x-4">
               {isUserLoggedIn ? (
-                <div className="relative user-menu-container">
+                <div className="relative user-menu-container z-[90]">
                   <button
                     onClick={() => setShowUserMenu(!showUserMenu)}
                     className="flex items-center space-x-3 bg-gradient-to-r from-[#FF3002]/20 to-[#FF6B47]/20 hover:from-[#FF3002]/30 hover:to-[#FF6B47]/30 backdrop-blur-xl border border-[#FF3002]/30 text-white px-4 py-2.5 rounded-xl transition-all duration-300 hover:shadow-lg hover:shadow-[#FF3002]/20 group"
@@ -4102,7 +4929,7 @@ function App() {
                   </button>
                   
                   {showUserMenu && (
-                    <div className="absolute right-0 top-full mt-3 w-72 bg-black/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-50 overflow-hidden">
+                    <div className="absolute right-0 top-full mt-3 w-72 bg-black/95 backdrop-blur-xl border border-white/10 rounded-2xl shadow-2xl z-[100] overflow-hidden">
                       {/* Header do menu */}
                       <div className="bg-gradient-to-r from-[#FF3002]/10 to-[#FF6B47]/10 p-4 border-b border-white/10">
                         <div className="flex items-center space-x-3">
@@ -4163,7 +4990,11 @@ function App() {
 
                         {/* Botão de logout */}
                         <button
-                          onClick={handleUserLogout}
+                          onMouseDown={(e) => {
+                            e.preventDefault();
+                            e.stopPropagation();
+                            handleUserLogout();
+                          }}
                           className="w-full bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 px-4 py-3 rounded-xl text-sm font-medium transition-all duration-300 hover:scale-105 flex items-center justify-center space-x-2"
                         >
                           <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -4752,7 +5583,7 @@ function App() {
                 </div>
 
                 <button 
-                  onClick={() => handlePlanPayment('Plano Básico', 3500)} // R$ 35,00 em centavos
+                  onClick={() => handlePlanSelection('Plano Básico', 3500)} // R$ 35,00 em centavos
                   className="w-full bg-gray-700 hover:bg-gray-600 text-white py-3 sm:py-4 rounded-xl font-bold text-lg transition-all duration-300 hover:shadow-lg transform hover:scale-105"
                 >
                   Escolher Básico
@@ -4808,7 +5639,7 @@ function App() {
                 </div>
 
                 <button 
-                  onClick={() => handlePlanPayment('Plano Pro', 4500)} // R$ 45,00 em centavos
+                  onClick={() => handlePlanSelection('Plano Pro', 4500)} // R$ 45,00 em centavos
                   className="w-full bg-[#FF3002] hover:bg-[#E02702] text-white py-3 sm:py-4 rounded-xl font-bold text-lg transition-all duration-300 hover:shadow-2xl hover:shadow-[#FF3002]/30 transform hover:scale-105"
                 >
                   Escolher Pro
@@ -4861,7 +5692,7 @@ function App() {
                 </div>
 
                 <button 
-                  onClick={() => handlePlanPayment('Plano Premium', 7500)} // R$ 75,00 em centavos
+                  onClick={() => handlePlanSelection('Plano Premium', 7500)} // R$ 75,00 em centavos
                   className="w-full bg-gradient-to-r from-purple-600 to-pink-600 hover:from-purple-700 hover:to-pink-700 text-white py-3 sm:py-4 rounded-xl font-bold text-lg transition-all duration-300 hover:shadow-2xl hover:shadow-purple-500/30 transform hover:scale-105"
                 >
                   Escolher Premium
@@ -4922,14 +5753,14 @@ function App() {
 
       {/* Search Interface - Mostrar quando clicar em "Começar agora" */}
       {showSearchInterface && !showAnalysis && (
-      <section className="py-8 sm:py-12 flex-1 relative overflow-hidden">
+      <section className="py-8 sm:py-12 flex-1 relative overflow-visible">
         {/* Background animado */}
         <div className="absolute inset-0 opacity-5 z-0">
           <div className="absolute top-1/4 left-1/4 w-64 h-64 bg-[#FF3002] rounded-full blur-3xl animate-pulse"></div>
           <div className="absolute bottom-1/4 right-1/4 w-48 h-48 bg-[#FF6B47] rounded-full blur-3xl animate-pulse" style={{animationDelay: '2s'}}></div>
         </div>
 
-        <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-20">
+        <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-50">
           {/* Header da busca */}
           <div className="text-center mb-8 sm:mb-12">
             <h2 className="text-3xl sm:text-4xl md:text-5xl font-bold text-white mb-4">
@@ -4938,9 +5769,52 @@ function App() {
             <p className="text-lg text-gray-300 max-w-2xl mx-auto mb-6">
               Digite o nome do time que deseja analisar e nossa IA fará uma análise completa
             </p>
+            
+            {/* Indicador de Créditos */}
+            {currentUser && (
+              <div className="bg-black/40 backdrop-blur-xl border border-white/20 rounded-2xl p-4 max-w-md mx-auto">
+                <div className="flex items-center justify-center space-x-3">
+                  <div className="w-8 h-8 bg-gradient-to-br from-[#FF3002] to-[#FF6B47] rounded-lg flex items-center justify-center">
+                    <span className="text-white font-bold text-sm">
+                      {currentUser.name?.charAt(0)?.toUpperCase() || 'U'}
+                    </span>
+                  </div>
+                  <div className="text-left">
+                    <p className="text-white font-semibold text-sm">{currentUser.name}</p>
+                    <div className="flex items-center space-x-2">
+                      <span className={`px-2 py-1 rounded-full text-xs font-medium ${
+                        currentUser.plan === 'Premium' 
+                          ? 'bg-purple-500/20 text-purple-400'
+                          : currentUser.plan === 'Pro'
+                          ? 'bg-[#FF3002]/20 text-[#FF3002]'
+                          : 'bg-blue-500/20 text-blue-400'
+                      }`}>
+                        {currentUser.plan}
+                      </span>
+                      <span className="text-gray-300 text-xs">
+                        {currentUser.plan === 'Premium' ? (
+                          '∞ Créditos ilimitados'
+                        ) : (
+                          <div className="flex items-center space-x-2">
+                            <span>{currentUser.credits} créditos restantes</span>
+                            <button
+                              onClick={() => syncUserData(currentUser.id)}
+                              className="text-[#FF3002] hover:text-[#FF6B47] transition-colors"
+                              title="Atualizar créditos"
+                            >
+                              🔄
+                            </button>
+                          </div>
+                        )}
+                      </span>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
 
-          <div className="max-w-2xl mx-auto relative">
+          <div className="max-w-2xl mx-auto relative z-20 search-container">
             <div className="relative">
               <input
                 type="text"
@@ -4964,7 +5838,7 @@ function App() {
 
             {/* Sugestões animadas quando não há busca */}
             {!searchTerm && !loading && (
-              <div className="mt-8">
+              <div className="mt-8 relative z-10">
                 <p className="text-center text-gray-400 mb-6">Exemplos de times populares:</p>
                 <div className="grid grid-cols-2 sm:grid-cols-3 gap-4">
                   {['Real Madrid', 'Barcelona', 'Liverpool', 'Manchester City', 'PSG', 'Bayern Munich'].map((team, index) => (
@@ -4990,26 +5864,12 @@ function App() {
             )}
 
               {/* Resultados da Pesquisa */}
-              {showResults && createPortal(
-                <>
-                  <div 
-                    className="fixed inset-0 z-[999998]" 
-                    onClick={handleClickOutside}
-                  ></div>
-                  <div 
-                    className="fixed bg-black/95 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl z-[999999] max-h-[320px] overflow-y-auto custom-scrollbar"
-                    style={{
-                      top: '395px',
-                      left: '50%',
-                      transform: 'translateX(-50%)',
-                      width: 'calc(100% - 2rem)',
-                      maxWidth: '42rem'
-                    }}
-                  >
-                    {renderResults()}
-                  </div>
-                </>,
-                document.body
+              {showResults && (
+                <div 
+                  className="absolute bg-black/95 backdrop-blur-xl border border-white/20 rounded-2xl shadow-2xl z-30 max-h-[320px] overflow-y-auto custom-scrollbar mt-2 w-full"
+                >
+                  {renderResults()}
+                </div>
               )}
           </div>
         </div>
@@ -5286,45 +6146,7 @@ function App() {
                  </p>
                </div>
 
-                              {/* Aviso de Temporada Inicial */}
-               {gameAnalysis && selectedFixture && (
-                 (() => {
-                   // Buscar dados reais da API para verificar número de jogos
-                   const homeGames = gameAnalysis.homeStats?.played || 0;
-                   const awayGames = gameAnalysis.awayStats?.played || 0;
-                   const minGames = Math.min(homeGames, awayGames);
-                   
-                   // Mostrar aviso se algum time tem menos de 10 jogos na temporada
-                   return minGames < 10;
-                 })() && (
-                   <div className="mb-6 sm:mb-8 p-4 sm:p-6 bg-gradient-to-br from-orange-500/5 via-yellow-500/5 to-orange-500/5 border border-orange-500/20 rounded-xl sm:rounded-2xl backdrop-blur-sm">
-                     <div className="flex items-start space-x-3 sm:space-x-4">
-                       <div className="bg-gradient-to-br from-orange-500/20 to-yellow-500/20 p-2 sm:p-3 rounded-lg sm:rounded-xl flex-shrink-0 shadow-lg">
-                         <AlertTriangle className="w-5 h-5 sm:w-6 sm:h-6 text-orange-400" />
-                       </div>
-                       <div className="flex-1">
-                         <div className="flex items-center space-x-2 mb-2">
-                           <h4 className="text-orange-400 font-bold text-base sm:text-lg">
-                             Temporada em Andamento
-                           </h4>
-                           <span className="bg-orange-500/20 text-orange-300 px-2 py-1 rounded-full text-xs font-semibold">
-                             Dados Limitados
-                           </span>
-                         </div>
-                         <p className="text-orange-200 text-xs sm:text-sm leading-relaxed">
-                           {(() => {
-                             const homeGames = gameAnalysis.homeStats?.played || 0;
-                             const awayGames = gameAnalysis.awayStats?.played || 0;
-                             const minGames = Math.min(homeGames, awayGames);
-                             
-                             return `Início de temporada - ${minGames} jogos disponíveis. Confiabilidade pode ser menor.`;
-                           })()}
-                         </p>
-                       </div>
-                     </div>
-                   </div>
-                 )
-               )}
+
 
                {/* Controles e Estatísticas */}
                <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mb-6 sm:mb-8">
@@ -5336,25 +6158,7 @@ function App() {
             )}
           </div>
                   
-                                  <div className="flex justify-center">
-                    <button 
-                      onClick={handleGenerateBets}
-                      disabled={generatingBets}
-                     className="bg-[#FF3002] hover:bg-[#E02702] disabled:bg-gray-600 disabled:cursor-not-allowed text-white px-4 sm:px-6 py-2 sm:py-3 rounded-lg sm:rounded-xl font-bold text-sm sm:text-base transition-all duration-300 hover:shadow-lg hover:shadow-[#FF3002]/30 transform hover:scale-105 flex items-center"
-                    >
-                      {generatingBets ? (
-                        <>
-                         <div className="animate-spin rounded-full h-3 w-3 sm:h-4 sm:w-4 border-b-2 border-white mr-2"></div>
-                          Gerando...
-                        </>
-                      ) : (
-                        <>
-                         <Target className="w-3 h-3 sm:w-4 sm:h-4 mr-2" />
-                          Gerar Aposta
-                        </>
-                      )}
-                    </button>
-                  </div>
+
                 </div>
 
                                {gameAnalysis?.betSuggestions && gameAnalysis.betSuggestions.length > 0 ? (
@@ -5412,6 +6216,7 @@ function App() {
                    {/* Card da aposta atual com animação */}
                    <div 
                      className="transition-all duration-500 ease-in-out transform"
+                     style={{ touchAction: 'pan-y pinch-zoom' }}
                      onTouchStart={handleTouchStart}
                      onTouchMove={handleTouchMove}
                      onTouchEnd={handleTouchEnd}
@@ -5583,26 +6388,58 @@ function App() {
         </div>
       </footer>
 
-      {/* Botão Flutuante Nova Pesquisa */}
+      {/* Botões Flutuantes */}
       {showAnalysis && (
-        <button 
-          onClick={() => {
-            setShowAnalysis(false);
-            setShowSearchInterface(true);
-            setSelectedFixture(null);
-            setGameAnalysis(null);
-            setSearchTerm('');
-            setTeams([]);
-            setSearchStep('teams');
-          }}
-          className="fixed bottom-6 right-6 z-50 bg-[#FF3002] hover:bg-[#E02702] text-white p-3 sm:p-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 active:scale-95 group"
-          title="Nova Pesquisa"
-        >
-          <Search className="w-5 h-5 sm:w-6 sm:h-6" />
-          <span className="absolute right-full mr-3 bg-black text-white px-2 py-1 rounded text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap sm:hidden">
-            Nova Pesquisa
-          </span>
-        </button>
+        <div className="fixed bottom-6 right-6 z-50 flex flex-col gap-3">
+          {/* Botão para rolar até área de apostas */}
+          <button 
+            onClick={() => {
+              // Procurar pelo botão "Gerar Aposta" de forma mais específica
+              const allButtons = Array.from(document.querySelectorAll('button'));
+              const betButton = allButtons.find(btn => {
+                const text = btn.textContent?.trim();
+                return text === 'Gerar Aposta' || text === 'Gerando...' || text?.includes('Gerar Aposta');
+              });
+              
+              if (betButton) {
+                console.log('Botão encontrado, rolando...');
+                betButton.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              } else {
+                console.log('Botão não encontrado, usando fallback...');
+                // Rolar até 75% da página (onde geralmente fica a área de apostas)
+                const scrollPosition = document.body.scrollHeight * 0.75;
+                window.scrollTo({ top: scrollPosition, behavior: 'smooth' });
+              }
+            }}
+            className="bg-blue-600 hover:bg-blue-700 text-white p-3 sm:p-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 active:scale-95 group"
+            title="Ir para Apostas"
+          >
+            <Target className="w-5 h-5 sm:w-6 sm:h-6" />
+            <span className="absolute right-full mr-3 bg-black text-white px-2 py-1 rounded text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap sm:hidden">
+              Ir para Apostas
+            </span>
+          </button>
+
+          {/* Botão Nova Pesquisa */}
+          <button 
+            onClick={() => {
+              setShowAnalysis(false);
+              setShowSearchInterface(true);
+              setSelectedFixture(null);
+              setGameAnalysis(null);
+              setSearchTerm('');
+              setTeams([]);
+              setSearchStep('teams');
+            }}
+            className="bg-[#FF3002] hover:bg-[#E02702] text-white p-3 sm:p-4 rounded-full shadow-lg hover:shadow-xl transition-all duration-300 hover:scale-110 active:scale-95 group"
+            title="Nova Pesquisa"
+          >
+            <Search className="w-5 h-5 sm:w-6 sm:h-6" />
+            <span className="absolute right-full mr-3 bg-black text-white px-2 py-1 rounded text-xs font-medium opacity-0 group-hover:opacity-100 transition-opacity duration-300 whitespace-nowrap sm:hidden">
+              Nova Pesquisa
+            </span>
+          </button>
+        </div>
       )}
 
       {/* Modal de Login */}
