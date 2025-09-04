@@ -244,6 +244,13 @@ export const createPixPayment = async (
   
   try {
     console.log('🔄 Criando preferência Checkout Pro para pagamento único...');
+    console.log('💰 Dados enviados para API PIX:', {
+      planName,
+      price,
+      priceInReais: price / 100,
+      orderId,
+      customerData
+    });
     
     // Chamar endpoint para criar preferência Checkout Pro
     const response = await fetch('/api/create-pix-payment', {
@@ -295,6 +302,13 @@ export const createSubscriptionPayment = async (
   
   try {
     console.log('🔄 Criando preferência Checkout Pro para assinatura...');
+    console.log('💰 Dados enviados para API Assinatura:', {
+      planName,
+      price,
+      priceInReais: price / 100,
+      orderId,
+      customerData
+    });
     
     // Chamar endpoint para criar preferência Checkout Pro
     const response = await fetch('/api/create-preference', {

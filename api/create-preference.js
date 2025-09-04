@@ -22,6 +22,13 @@ module.exports = async function handler(req, res) {
     const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN || 'APP_USR-4948508052320612-090417-52cf3c977b061c03b25a0bbd84920dd3-1423321368';
 
     console.log('🔄 Criando preferência Checkout Pro para assinatura:', { planName, price, orderId });
+    console.log('💰 Valores recebidos no endpoint Assinatura:', {
+      planName,
+      price,
+      priceInReais: price / 100,
+      orderId,
+      customerData
+    });
 
     // Criar preferência para Checkout Pro (assinatura)
     const preferenceData = {
