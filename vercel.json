@@ -6,7 +6,7 @@
   "outputDirectory": "project/dist",
   "functions": {
     "project/api/**/*.js": {
-      "runtime": "nodejs18.x"
+      "runtime": "@vercel/node"
     }
   },
   "rewrites": [
