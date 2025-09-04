@@ -55,9 +55,9 @@ module.exports = async function handler(req, res) {
         installments: 12 // Permitir até 12 parcelas
       },
       back_urls: {
-        success: `${req.headers.origin || 'http://localhost:5173'}/sucesso`,
-        failure: `${req.headers.origin || 'http://localhost:5173'}/falha`,
-        pending: `${req.headers.origin || 'http://localhost:5173'}/pendente`
+        success: `${req.headers.origin || 'https://apostai-sistema.vercel.app'}/sucesso`,
+        failure: `${req.headers.origin || 'https://apostai-sistema.vercel.app'}/falha`,
+        pending: `${req.headers.origin || 'https://apostai-sistema.vercel.app'}/pendente`
       },
       auto_return: 'approved',
       external_reference: orderId,

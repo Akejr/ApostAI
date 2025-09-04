@@ -159,6 +159,7 @@ export const checkPaymentStatus = async (
 ): Promise<{ success: boolean; paid: boolean; status?: string }> => {
   try {
     console.log('🔍 Verificando status do pagamento:', { paymentId, orderId });
+    console.log('🔍 URL da verificação:', `${MERCADOPAGO_CONFIG.baseUrl}/v1/payments/${paymentId}`);
     
     const response = await fetch(`${MERCADOPAGO_CONFIG.baseUrl}/v1/payments/${paymentId}`, {
       method: 'GET',
