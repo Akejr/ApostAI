@@ -782,7 +782,8 @@ function App() {
         originalPrice: selectedPlan.price,
         discount: couponDiscount,
         finalPrice: finalPrice,
-        finalPriceInReais: finalPrice / 100
+        finalPriceInReais: finalPrice / 100,
+        selectedPlan: selectedPlan
       });
     }
   }, [couponDiscount, selectedPlan]);
@@ -913,6 +914,21 @@ function App() {
       console.log('🔄 Estado anterior couponDiscount:', couponDiscount);
       
       setCouponDiscount(data.discount_percentage);
+      
+      // Verificar se o estado foi atualizado
+      setTimeout(() => {
+        console.log('🔄 Estado após setCouponDiscount:', couponDiscount);
+        if (selectedPlan) {
+          const newDiscountAmount = (selectedPlan.price * data.discount_percentage / 100);
+          const newFinalPrice = selectedPlan.price - newDiscountAmount;
+          console.log('💰 Novo cálculo após cupom:', {
+            originalPrice: selectedPlan.price,
+            newDiscount: data.discount_percentage,
+            newFinalPrice: newFinalPrice,
+            newFinalPriceInReais: newFinalPrice / 100
+          });
+        }
+      }, 100);
       
       console.log(`✅ Cupom aplicado: ${data.name} - ${data.discount_percentage}% de desconto`);
       return true;
@@ -4453,7 +4469,18 @@ function App() {
 
               {/* Botão de Confirmação */}
               <button
-                onClick={async () => await handlePlanPayment(selectedPlan.name, Math.round(finalPrice))}
+                onClick={async () => {
+                  const roundedFinalPrice = Math.round(finalPrice);
+                  console.log('🎯 Botão clicado - Valores finais:', {
+                    originalPrice: selectedPlan.price,
+                    couponDiscount: couponDiscount,
+                    discountAmount: discountAmount,
+                    finalPrice: finalPrice,
+                    roundedFinalPrice: roundedFinalPrice,
+                    finalPriceInReais: roundedFinalPrice / 100
+                  });
+                  await handlePlanPayment(selectedPlan.name, roundedFinalPrice);
+                }}
                 className="w-full bg-gradient-to-r from-[#FF3002] to-[#E02702] hover:from-[#E02702] hover:to-[#C01F02] text-white py-4 rounded-xl font-bold text-lg transition-all duration-300 hover:shadow-2xl hover:shadow-[#FF3002]/30 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={!selectedPaymentMethod}
               >
