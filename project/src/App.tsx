@@ -1,9 +1,10 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { createPlanPayment, openCheckout } from './lib/payment';
+import { createPlanPayment, createPixPayment, createSubscriptionPayment, openCheckout } from './lib/payment';
 import SuccessPage from './components/SuccessPage';
 import FailurePage from './components/FailurePage';
 import PendingPage from './components/PendingPage';
+import PaymentMethodSelector from './components/PaymentMethodSelector';
 import { Search, TrendingUp, Users, Target, User, ChevronRight, Calendar, MapPin, ArrowLeft, BarChart3, Clock, TrendingDown, AlertTriangle, CheckCircle, Home, ChevronLeft, Menu, X } from 'lucide-react';
 import logo from './assets/logo.png';
 import Admin from './Admin';
@@ -766,6 +767,7 @@ function App() {
   // Estados para checkout
   const [showCheckout, setShowCheckout] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<{name: string, price: number, originalPrice?: number} | null>(null);
+  const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pix' | 'subscription' | null>(null);
   const [couponCode, setCouponCode] = useState('');
   const [couponDiscount, setCouponDiscount] = useState(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -914,19 +916,34 @@ function App() {
     try {
       console.log('🔄 Iniciando processo de pagamento...');
       
-      // Criar link de pagamento para o plano selecionado
-      const { orderId, paymentUrl } = await createPlanPayment(planName, finalPrice);
+      if (!selectedPaymentMethod) {
+        alert('Por favor, selecione uma forma de pagamento.');
+        return;
+      }
+      
+      let paymentResult;
+      
+      if (selectedPaymentMethod === 'pix') {
+        console.log('💳 Criando pagamento PIX...');
+        paymentResult = await createPixPayment(planName, finalPrice);
+      } else {
+        console.log('🔄 Criando assinatura...');
+        paymentResult = await createSubscriptionPayment(planName, finalPrice);
+      }
+      
+      const { orderId, paymentUrl } = paymentResult;
       
       // Salvar informações do pedido no localStorage para verificação posterior
       localStorage.setItem('currentOrder', JSON.stringify({
         orderId,
         planName,
         planPrice: finalPrice,
+        paymentMethod: selectedPaymentMethod,
         timestamp: Date.now()
       }));
       
       console.log('🔗 URL de pagamento gerada:', paymentUrl);
-      console.log('📦 Dados do pedido salvos:', { orderId, planName, finalPrice });
+      console.log('📦 Dados do pedido salvos:', { orderId, planName, finalPrice, selectedPaymentMethod });
       
       // Abrir checkout do Mercado Pago
       openCheckout(paymentUrl);
@@ -4414,12 +4431,21 @@ function App() {
                 </div>
               </div>
 
+              {/* Seletor de Método de Pagamento */}
+              <PaymentMethodSelector
+                onMethodSelect={setSelectedPaymentMethod}
+                selectedMethod={selectedPaymentMethod}
+                planName={selectedPlan.name}
+                price={Math.round(finalPrice)}
+              />
+
               {/* Botão de Confirmação */}
               <button
                 onClick={async () => await handlePlanPayment(selectedPlan.name, Math.round(finalPrice))}
-                className="w-full bg-gradient-to-r from-[#FF3002] to-[#E02702] hover:from-[#E02702] hover:to-[#C01F02] text-white py-4 rounded-xl font-bold text-lg transition-all duration-300 hover:shadow-2xl hover:shadow-[#FF3002]/30 transform hover:scale-105"
+                className="w-full bg-gradient-to-r from-[#FF3002] to-[#E02702] hover:from-[#E02702] hover:to-[#C01F02] text-white py-4 rounded-xl font-bold text-lg transition-all duration-300 hover:shadow-2xl hover:shadow-[#FF3002]/30 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                disabled={!selectedPaymentMethod}
               >
-                Confirmar e Pagar
+                {selectedPaymentMethod ? 'Confirmar e Pagar' : 'Selecione uma forma de pagamento'}
               </button>
               
               <p className="text-center text-gray-400 text-sm">

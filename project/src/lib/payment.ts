@@ -234,8 +234,61 @@ export const createTeamAnalysisPayment = async (
   return { orderId, paymentUrl };
 };
 
-// Função para criar link de planos (usando endpoint real)
-export const createPlanPayment = async (
+// Função para criar pagamento PIX (pagamento único)
+export const createPixPayment = async (
+  planName: string,
+  price: number, // Preço em centavos
+  customerData?: CustomerData
+): Promise<{ orderId: string; paymentUrl: string; qrCode?: string; qrCodeBase64?: string }> => {
+  const orderId = generateOrderId();
+  
+  try {
+    console.log('🔄 Criando pagamento PIX via API...');
+    
+    // Chamar endpoint para criar pagamento PIX
+    const response = await fetch('/api/create-pix-payment', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        planName,
+        price,
+        orderId,
+        customerData
+      })
+    });
+
+    console.log('📡 Resposta da API PIX:', response.status);
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error('❌ Erro na API PIX:', errorData);
+      throw new Error(`Erro na API PIX: ${response.status} - ${errorData}`);
+    }
+
+    const data = await response.json();
+    console.log('✅ Pagamento PIX criado:', data);
+
+    if (data.success && data.initPoint) {
+      return {
+        orderId,
+        paymentUrl: data.initPoint,
+        qrCode: data.qrCode,
+        qrCodeBase64: data.qrCodeBase64
+      };
+    } else {
+      throw new Error('Resposta inválida da API PIX');
+    }
+
+  } catch (error) {
+    console.error('❌ Erro ao criar pagamento PIX:', error);
+    throw error;
+  }
+};
+
+// Função para criar assinatura (cartão - pagamento recorrente)
+export const createSubscriptionPayment = async (
   planName: string,
   price: number, // Preço em centavos
   customerData?: CustomerData
@@ -243,9 +296,9 @@ export const createPlanPayment = async (
   const orderId = generateOrderId();
   
   try {
-    console.log('🔄 Criando preferência de pagamento via API...');
+    console.log('🔄 Criando assinatura via API...');
     
-    // Chamar endpoint para criar preferência
+    // Chamar endpoint para criar assinatura
     const response = await fetch('/api/create-preference', {
       method: 'POST',
       headers: {
@@ -259,16 +312,16 @@ export const createPlanPayment = async (
       })
     });
 
-    console.log('📡 Resposta da API:', response.status);
+    console.log('📡 Resposta da API Assinatura:', response.status);
 
     if (!response.ok) {
       const errorData = await response.text();
-      console.error('❌ Erro na API:', errorData);
-      throw new Error(`Erro na API: ${response.status} - ${errorData}`);
+      console.error('❌ Erro na API Assinatura:', errorData);
+      throw new Error(`Erro na API Assinatura: ${response.status} - ${errorData}`);
     }
 
     const data = await response.json();
-    console.log('✅ Preferência criada:', data);
+    console.log('✅ Assinatura criada:', data);
 
     if (data.success && data.initPoint) {
       return {
@@ -276,19 +329,23 @@ export const createPlanPayment = async (
         paymentUrl: data.initPoint
       };
     } else {
-      throw new Error('Resposta inválida da API');
+      throw new Error('Resposta inválida da API Assinatura');
     }
 
   } catch (error) {
-    console.error('❌ Erro ao criar pagamento:', error);
-    
-    // Fallback para desenvolvimento
-    console.log('🔄 Usando fallback para desenvolvimento...');
-    return {
-      orderId,
-      paymentUrl: `https://www.mercadopago.com.br/checkout/v1/redirect?pref_id=fallback_${orderId}`
-    };
+    console.error('❌ Erro ao criar assinatura:', error);
+    throw error;
   }
+};
+
+// Função para criar link de planos (mantida para compatibilidade - usa assinatura)
+export const createPlanPayment = async (
+  planName: string,
+  price: number, // Preço em centavos
+  customerData?: CustomerData
+): Promise<{ orderId: string; paymentUrl: string }> => {
+  // Por padrão, usar assinatura (cartão)
+  return createSubscriptionPayment(planName, price, customerData);
 };
 
 // Gerar código único para o usuário no formato BR5809596PU (mantido)
