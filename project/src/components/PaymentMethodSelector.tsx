@@ -53,7 +53,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
               </div>
               <div>
                 <h4 className="font-semibold text-gray-800">PIX</h4>
-                <p className="text-sm text-gray-600">Pagamento único mensal</p>
+                <p className="text-sm text-gray-600">Pagamento único via Checkout Pro</p>
               </div>
             </div>
             {selectedMethod === 'pix' && (
@@ -70,7 +70,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 </span>
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                💡 Você precisará pagar manualmente todo mês
+                💡 Pagamento único - você escolhe PIX, cartão ou boleto
               </p>
             </div>
           )}
@@ -99,7 +99,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
               </div>
               <div>
                 <h4 className="font-semibold text-gray-800">Cartão de Crédito</h4>
-                <p className="text-sm text-gray-600">Assinatura automática</p>
+                <p className="text-sm text-gray-600">Assinatura via Checkout Pro</p>
               </div>
             </div>
             {selectedMethod === 'subscription' && (
@@ -116,7 +116,7 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
                 </span>
               </div>
               <p className="text-xs text-gray-500 mt-1">
-                ✅ Cobrança automática todo mês no seu cartão
+                ✅ Assinatura automática - você escolhe PIX, cartão ou boleto
               </p>
             </div>
           )}

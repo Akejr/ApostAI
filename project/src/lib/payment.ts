@@ -234,18 +234,18 @@ export const createTeamAnalysisPayment = async (
   return { orderId, paymentUrl };
 };
 
-// Função para criar pagamento PIX (pagamento único)
+// Função para criar pagamento único via Checkout Pro
 export const createPixPayment = async (
   planName: string,
   price: number, // Preço em centavos
   customerData?: CustomerData
-): Promise<{ orderId: string; paymentUrl: string; qrCode?: string; qrCodeBase64?: string }> => {
+): Promise<{ orderId: string; paymentUrl: string }> => {
   const orderId = generateOrderId();
   
   try {
-    console.log('🔄 Criando pagamento PIX via API...');
+    console.log('🔄 Criando preferência Checkout Pro para pagamento único...');
     
-    // Chamar endpoint para criar pagamento PIX
+    // Chamar endpoint para criar preferência Checkout Pro
     const response = await fetch('/api/create-pix-payment', {
       method: 'POST',
       headers: {
@@ -259,35 +259,33 @@ export const createPixPayment = async (
       })
     });
 
-    console.log('📡 Resposta da API PIX:', response.status);
+    console.log('📡 Resposta da API Checkout Pro:', response.status);
 
     if (!response.ok) {
       const errorData = await response.text();
-      console.error('❌ Erro na API PIX:', errorData);
-      throw new Error(`Erro na API PIX: ${response.status} - ${errorData}`);
+      console.error('❌ Erro na API Checkout Pro:', errorData);
+      throw new Error(`Erro na API Checkout Pro: ${response.status} - ${errorData}`);
     }
 
     const data = await response.json();
-    console.log('✅ Pagamento PIX criado:', data);
+    console.log('✅ Preferência Checkout Pro criada:', data);
 
     if (data.success && data.initPoint) {
       return {
         orderId,
-        paymentUrl: data.initPoint,
-        qrCode: data.qrCode,
-        qrCodeBase64: data.qrCodeBase64
+        paymentUrl: data.initPoint
       };
     } else {
-      throw new Error('Resposta inválida da API PIX');
+      throw new Error('Resposta inválida da API Checkout Pro');
     }
 
   } catch (error) {
-    console.error('❌ Erro ao criar pagamento PIX:', error);
+    console.error('❌ Erro ao criar preferência Checkout Pro:', error);
     throw error;
   }
 };
 
-// Função para criar assinatura (cartão - pagamento recorrente)
+// Função para criar assinatura via Checkout Pro
 export const createSubscriptionPayment = async (
   planName: string,
   price: number, // Preço em centavos
@@ -296,9 +294,9 @@ export const createSubscriptionPayment = async (
   const orderId = generateOrderId();
   
   try {
-    console.log('🔄 Criando assinatura via API...');
+    console.log('🔄 Criando preferência Checkout Pro para assinatura...');
     
-    // Chamar endpoint para criar assinatura
+    // Chamar endpoint para criar preferência Checkout Pro
     const response = await fetch('/api/create-preference', {
       method: 'POST',
       headers: {
@@ -312,16 +310,16 @@ export const createSubscriptionPayment = async (
       })
     });
 
-    console.log('📡 Resposta da API Assinatura:', response.status);
+    console.log('📡 Resposta da API Checkout Pro:', response.status);
 
     if (!response.ok) {
       const errorData = await response.text();
-      console.error('❌ Erro na API Assinatura:', errorData);
-      throw new Error(`Erro na API Assinatura: ${response.status} - ${errorData}`);
+      console.error('❌ Erro na API Checkout Pro:', errorData);
+      throw new Error(`Erro na API Checkout Pro: ${response.status} - ${errorData}`);
     }
 
     const data = await response.json();
-    console.log('✅ Assinatura criada:', data);
+    console.log('✅ Preferência Checkout Pro criada:', data);
 
     if (data.success && data.initPoint) {
       return {
@@ -329,11 +327,11 @@ export const createSubscriptionPayment = async (
         paymentUrl: data.initPoint
       };
     } else {
-      throw new Error('Resposta inválida da API Assinatura');
+      throw new Error('Resposta inválida da API Checkout Pro');
     }
 
   } catch (error) {
-    console.error('❌ Erro ao criar assinatura:', error);
+    console.error('❌ Erro ao criar preferência Checkout Pro:', error);
     throw error;
   }
 };

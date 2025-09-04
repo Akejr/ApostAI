@@ -1,5 +1,5 @@
-// Endpoint para criar pagamento único via PIX no Mercado Pago
-// Baseado na documentação: https://www.mercadopago.com.br/developers/pt/docs/checkout-api-v2/payment-integration/pix
+// Endpoint para criar preferência de pagamento único via Checkout Pro
+// Baseado na documentação: https://www.mercadopago.com.br/developers/pt/docs/checkout-pro/overview
 
 module.exports = async function handler(req, res) {
   // Configurar CORS
@@ -21,14 +21,14 @@ module.exports = async function handler(req, res) {
     const { planName, price, orderId, customerData } = req.body;
     const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN || 'APP_USR-4948508052320612-090417-52cf3c977b061c03b25a0bbd84920dd3-1423321368';
 
-    console.log('🔄 Criando pagamento PIX no Mercado Pago:', { planName, price, orderId });
+    console.log('🔄 Criando preferência Checkout Pro para pagamento único:', { planName, price, orderId });
 
-    // Criar preferência para pagamento único com PIX
+    // Criar preferência para Checkout Pro (pagamento único)
     const preferenceData = {
       items: [
         {
           title: `${planName} - ApostAI`,
-          description: 'Apostas de futebol inteligentes - Pagamento mensal',
+          description: 'Apostas de futebol inteligentes - Pagamento mensal único',
           quantity: 1,
           unit_price: price / 100, // Converter centavos para reais
           currency_id: 'BRL'
@@ -43,12 +43,9 @@ module.exports = async function handler(req, res) {
         } : undefined
       },
       payment_methods: {
-        excluded_payment_types: [
-          { id: 'credit_card' },
-          { id: 'debit_card' }
-        ],
+        excluded_payment_types: [],
         excluded_payment_methods: [],
-        installments: 1
+        installments: 12 // Permitir até 12 parcelas
       },
       back_urls: {
         success: `${req.headers.origin || 'http://localhost:5173'}/sucesso`,
@@ -58,10 +55,14 @@ module.exports = async function handler(req, res) {
       auto_return: 'approved',
       external_reference: orderId,
       notification_url: `${req.headers.origin || 'https://apostai-sistema.vercel.app'}/api/webhook/mercadopago`,
-      statement_descriptor: 'APOSTAI'
+      statement_descriptor: 'APOSTAI',
+      metadata: {
+        payment_type: 'single_payment',
+        plan_name: planName
+      }
     };
 
-    console.log('📋 Dados da preferência PIX:', preferenceData);
+    console.log('📋 Dados da preferência Checkout Pro:', preferenceData);
 
     // Fazer requisição para API de Preferências do Mercado Pago
     const response = await fetch('https://api.mercadopago.com/checkout/preferences', {
@@ -73,11 +74,11 @@ module.exports = async function handler(req, res) {
       body: JSON.stringify(preferenceData)
     });
 
-    console.log('📡 Status da resposta PIX:', response.status);
+    console.log('📡 Status da resposta Checkout Pro:', response.status);
 
     if (!response.ok) {
       const errorData = await response.text();
-      console.error('❌ Erro na API do MP (PIX):', errorData);
+      console.error('❌ Erro na API do MP (Checkout Pro):', errorData);
       return res.status(response.status).json({
         success: false,
         error: 'Erro na API do Mercado Pago',
@@ -86,19 +87,18 @@ module.exports = async function handler(req, res) {
     }
 
     const data = await response.json();
-    console.log('✅ Preferência PIX criada:', data);
+    console.log('✅ Preferência Checkout Pro criada:', data);
 
     return res.status(200).json({
       success: true,
       preferenceId: data.id,
       initPoint: data.init_point,
-      qrCode: data.qr_code,
-      qrCodeBase64: data.qr_code_base64,
-      status: 'pending'
+      status: 'pending',
+      paymentType: 'single_payment'
     });
 
   } catch (error) {
-    console.error('❌ Erro ao criar pagamento PIX:', error);
+    console.error('❌ Erro ao criar preferência Checkout Pro:', error);
     
     return res.status(500).json({
       success: false,
