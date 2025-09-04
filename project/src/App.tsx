@@ -775,7 +775,17 @@ function App() {
   // Monitor mudanças no couponDiscount
   useEffect(() => {
     console.log('🔄 couponDiscount mudou para:', couponDiscount);
-  }, [couponDiscount]);
+    if (selectedPlan) {
+      const discountAmount = (selectedPlan.price * couponDiscount / 100);
+      const finalPrice = selectedPlan.price - discountAmount;
+      console.log('💰 Recalculando com novo desconto:', {
+        originalPrice: selectedPlan.price,
+        discount: couponDiscount,
+        finalPrice: finalPrice,
+        finalPriceInReais: finalPrice / 100
+      });
+    }
+  }, [couponDiscount, selectedPlan]);
   
   // Estados para autenticação de usuários
   const [isUserLoggedIn, setIsUserLoggedIn] = useState(() => {
@@ -915,6 +925,14 @@ function App() {
   const handlePlanPayment = async (planName: string, finalPrice: number) => {
     try {
       console.log('🔄 Iniciando processo de pagamento...');
+      console.log('💰 Valores recebidos:', {
+        planName,
+        finalPrice,
+        finalPriceInReais: finalPrice / 100,
+        couponDiscount,
+        originalPrice: selectedPlan?.price,
+        originalPriceInReais: selectedPlan?.price ? selectedPlan.price / 100 : 0
+      });
       
       if (!selectedPaymentMethod) {
         alert('Por favor, selecione uma forma de pagamento.');
@@ -4266,7 +4284,8 @@ function App() {
       finalPrice: finalPrice,
       planPriceInReais: selectedPlan.price / 100,
       discountAmountInReais: discountAmount / 100,
-      finalPriceInReais: finalPrice / 100
+      finalPriceInReais: finalPrice / 100,
+      calculation: `${selectedPlan.price} - (${selectedPlan.price} * ${couponDiscount} / 100) = ${finalPrice}`
     });
     
     return (
@@ -4382,16 +4401,9 @@ function App() {
                         return;
                       }
                       
-                      // Teste simples primeiro
-                      console.log('🧪 Testando setCouponDiscount diretamente...');
-                      setCouponDiscount(10);
-                      console.log('✅ Desconto definido para 10% (teste)');
-                      
-                      // Depois aplicar o cupom real
-                      setTimeout(async () => {
-                        const result = await applyCoupon(couponCode);
-                        console.log('📊 Resultado final:', result);
-                      }, 100);
+                      // Aplicar o cupom
+                      const result = await applyCoupon(couponCode);
+                      console.log('📊 Resultado final:', result);
                     }}
                     className="bg-[#FF3002] hover:bg-[#E02702] text-white px-6 py-3 rounded-xl font-semibold transition-colors"
                   >
