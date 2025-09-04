@@ -1,8 +1,14 @@
 {
+  "name": "apostai-sistema",
   "version": 2,
   "framework": "vite",
   "buildCommand": "npm run build",
   "outputDirectory": "project/dist",
+  "functions": {
+    "project/api/**/*.js": {
+      "runtime": "nodejs18.x"
+    }
+  },
   "rewrites": [
     {
       "source": "/(.*)",
