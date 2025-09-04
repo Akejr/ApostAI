@@ -22,22 +22,32 @@ const SuccessPage: React.FC = () => {
 
   useEffect(() => {
     const verifyPayment = async () => {
-      // Pegar parâmetros da URL
+      // Pegar parâmetros da URL do Mercado Pago
       const urlParams = new URLSearchParams(window.location.search);
-      const transactionId = urlParams.get('transaction_id');
-      const orderId = urlParams.get('order_nsu');
+      const paymentId = urlParams.get('payment_id');
+      const status = urlParams.get('status');
+      const externalReference = urlParams.get('external_reference');
       
-      console.log('🔍 Parâmetros da URL:', { transactionId, orderId });
+      console.log('🔍 Parâmetros da URL (Mercado Pago):', { paymentId, status, externalReference });
       console.log('🔍 URL completa:', window.location.href);
       
-      // Se temos transaction_id, significa que o usuário foi redirecionado da InfinitePay
-      // Vamos considerar como pagamento aprovado (devido ao CORS)
-      if (transactionId && orderId) {
-        console.log('✅ Pagamento detectado! Solicitando nome...');
-        setPaymentStatus({ success: true, paid: true, loading: false });
-        setShowNameInput(true);
+      // Verificar se temos parâmetros do Mercado Pago
+      if (paymentId && externalReference) {
+        console.log('✅ Pagamento detectado via Mercado Pago!');
+        
+        // Verificar status do pagamento
+        const paymentStatus = await checkPaymentStatus(paymentId, externalReference);
+        
+        if (paymentStatus.success) {
+          console.log('✅ Pagamento aprovado! Solicitando nome...');
+          setPaymentStatus({ success: true, paid: paymentStatus.paid, loading: false });
+          setShowNameInput(true);
+        } else {
+          console.log('❌ Pagamento não aprovado');
+          setPaymentStatus({ success: false, paid: false, loading: false });
+        }
       } else {
-        console.log('❌ Parâmetros não encontrados na URL');
+        console.log('❌ Parâmetros do Mercado Pago não encontrados na URL');
         setPaymentStatus({ success: false, paid: false, loading: false });
       }
     };
@@ -45,7 +55,7 @@ const SuccessPage: React.FC = () => {
     verifyPayment();
   }, []);
 
-  const generateUserCodeAndSave = async (transactionId: string, orderId: string, fullName: string) => {
+  const generateUserCodeAndSave = async (paymentId: string, orderId: string, fullName: string) => {
     setUserData(prev => ({ ...prev, loading: true }));
     
     try {
@@ -67,7 +77,7 @@ const SuccessPage: React.FC = () => {
         plan: orderData.planName,
         planPrice: orderData.planPrice,
         orderId: orderId,
-        transactionId: transactionId
+        transactionId: paymentId // Usar paymentId como transactionId para compatibilidade
       });
       
       if (savedUser) {
@@ -169,10 +179,10 @@ const SuccessPage: React.FC = () => {
                       onClick={async () => {
                         if (userName.trim()) {
                           const urlParams = new URLSearchParams(window.location.search);
-                          const transactionId = urlParams.get('transaction_id');
-                          const orderId = urlParams.get('order_nsu');
-                          if (transactionId && orderId) {
-                            await generateUserCodeAndSave(transactionId, orderId, userName.trim());
+                          const paymentId = urlParams.get('payment_id');
+                          const externalReference = urlParams.get('external_reference');
+                          if (paymentId && externalReference) {
+                            await generateUserCodeAndSave(paymentId, externalReference, userName.trim());
                             setShowNameInput(false);
                           }
                         }

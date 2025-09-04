@@ -807,6 +807,13 @@ const Admin: React.FC = () => {
                     <span className="bg-[#FF3002]/20 text-[#FF3002] px-4 py-2 rounded-full text-sm font-medium">
                        {filteredUsers.length} usuários
                      </span>
+                     <button
+                       onClick={loadUsers}
+                       className="bg-blue-500/20 hover:bg-blue-500/30 text-blue-400 hover:text-blue-300 px-4 py-2 rounded-xl font-medium transition-all duration-300 border border-blue-500/30 hover:border-blue-500/50"
+                       title="Atualizar dados dos usuários"
+                     >
+                       🔄 Atualizar
+                     </button>
                    </div>
 
                   <div className="flex flex-col sm:flex-row space-y-3 sm:space-y-0 sm:space-x-6">
@@ -843,26 +850,37 @@ const Admin: React.FC = () => {
                      </div>
                    </div>
                  ) : (
-                   <div className="overflow-x-auto">
-                     <table className="w-full">
+                   <div>
+                     <table className="w-full table-fixed">
+                       <colgroup>
+                         <col className="w-[15%]" />
+                         <col className="w-[12%]" />
+                         <col className="w-[10%]" />
+                         <col className="w-[8%]" />
+                         <col className="w-[8%]" />
+                         <col className="w-[12%]" />
+                         <col className="w-[10%]" />
+                         <col className="w-[25%]" />
+                       </colgroup>
                        <thead className="bg-black/60">
                          <tr>
-                          <th className="px-8 py-5 text-left text-white font-semibold">Nome</th>
-                          <th className="px-8 py-5 text-left text-white font-semibold">Código</th>
-                          <th className="px-8 py-5 text-left text-white font-semibold">Plano</th>
-                          <th className="px-8 py-5 text-left text-white font-semibold">Créditos</th>
-                          <th className="px-8 py-5 text-left text-white font-semibold">Expira em</th>
-                          <th className="px-8 py-5 text-left text-white font-semibold">Status</th>
-                          <th className="px-8 py-5 text-left text-white font-semibold">Ações</th>
+                          <th className="px-3 py-4 text-left text-white font-semibold text-sm">Nome</th>
+                          <th className="px-3 py-4 text-left text-white font-semibold text-sm">Código</th>
+                          <th className="px-3 py-4 text-left text-white font-semibold text-sm">Plano</th>
+                          <th className="px-3 py-4 text-left text-white font-semibold text-sm">Créditos</th>
+                          <th className="px-3 py-4 text-left text-white font-semibold text-sm">Análises</th>
+                          <th className="px-3 py-4 text-left text-white font-semibold text-sm">Expira em</th>
+                          <th className="px-3 py-4 text-left text-white font-semibold text-sm">Status</th>
+                          <th className="px-3 py-4 text-left text-white font-semibold text-sm">Ações</th>
                          </tr>
                        </thead>
                        <tbody className="divide-y divide-white/10">
                          {filteredUsers.map((user) => (
                            <tr key={user.id} className="hover:bg-white/5 transition-colors">
-                            <td className="px-8 py-6 text-white font-medium">{user.name}</td>
-                            <td className="px-8 py-6 text-gray-300 font-mono">{user.code}</td>
-                            <td className="px-8 py-6">
-                              <span className={`px-4 py-2 rounded-full text-xs font-medium ${
+                            <td className="px-3 py-4 text-white font-medium text-sm truncate" title={user.name}>{user.name}</td>
+                            <td className="px-3 py-4 text-gray-300 font-mono text-xs">{user.code}</td>
+                            <td className="px-3 py-4">
+                              <span className={`px-2 py-1 rounded-full text-xs font-medium ${
                                  user.plan === 'Premium' 
                                    ? 'bg-purple-500/20 text-purple-400'
                                    : user.plan === 'Pro'
@@ -872,59 +890,60 @@ const Admin: React.FC = () => {
                                  {user.plan}
                                </span>
                              </td>
-                                                        <td className="px-8 py-6 text-white font-semibold">{user.credits}</td>
-                            <td className="px-8 py-6 text-gray-300">
+                            <td className="px-3 py-4 text-white font-semibold text-sm">{user.credits}</td>
+                            <td className="px-3 py-4 text-blue-400 font-semibold text-sm">{user.analyses || 0}</td>
+                            <td className="px-3 py-4 text-gray-300 text-sm">
                               {user.expiresAt ? new Date(user.expiresAt).toLocaleDateString('pt-BR') : 'N/A'}
                             </td>
-                            <td className="px-8 py-6">
-                               <span className={`flex items-center space-x-2 ${
+                            <td className="px-3 py-4">
+                               <span className={`flex items-center space-x-1 ${
                                  user.status === 'active' 
                                    ? 'text-green-400' 
                                    : 'text-red-400'
                                }`}>
                                  {user.status === 'active' ? (
-                                   <CheckCircle className="w-4 h-4" />
+                                   <CheckCircle className="w-3 h-3" />
                                  ) : (
-                                   <AlertCircle className="w-4 h-4" />
+                                   <AlertCircle className="w-3 h-3" />
                                  )}
-                                 <span className="text-sm font-medium">
+                                 <span className="text-xs font-medium">
                                    {user.status === 'active' ? 'Ativo' : 'Expirado'}
                                  </span>
                                </span>
                              </td>
-                            <td className="px-8 py-6">
-                              <div className="flex items-center space-x-3">
+                            <td className="px-3 py-4">
+                              <div className="flex items-center space-x-1 flex-wrap gap-1">
                                 <button
                                   onClick={() => openCreditsModal(user, 'add')}
-                                  className="bg-green-500/10 hover:bg-green-500/20 text-green-400 hover:text-green-300 px-4 py-2 rounded-lg text-sm transition-all duration-300"
+                                  className="bg-green-500/10 hover:bg-green-500/20 text-green-400 hover:text-green-300 p-2 rounded-lg text-sm transition-all duration-300"
                                   title="Adicionar créditos"
                                 >
-                                  <Plus className="w-4 h-4" />
+                                  <Plus className="w-3 h-3" />
                                 </button>
                                 
                                 <button
                                   onClick={() => openCreditsModal(user, 'remove')}
-                                  className="bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 px-4 py-2 rounded-lg text-sm transition-all duration-300"
+                                  className="bg-red-500/10 hover:bg-red-500/20 text-red-400 hover:text-red-300 p-2 rounded-lg text-sm transition-all duration-300"
                                   title="Remover créditos"
                                 >
-                                  <X className="w-4 h-4" />
+                                  <X className="w-3 h-3" />
                                 </button>
                                 
                                  {user.status === 'active' ? (
                                    <button
                                     onClick={() => handleCancelPlan(user)}
-                                    className="bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 hover:text-orange-300 px-4 py-2 rounded-lg text-sm transition-all duration-300"
+                                    className="bg-orange-500/10 hover:bg-orange-500/20 text-orange-400 hover:text-orange-300 p-2 rounded-lg text-sm transition-all duration-300"
                                     title="Cancelar plano"
                                    >
-                                    <AlertCircle className="w-4 h-4" />
+                                    <AlertCircle className="w-3 h-3" />
                                    </button>
                                  ) : (
                                    <button
                                     onClick={() => handleReactivatePlan(user)}
-                                    className="bg-green-500/10 hover:bg-green-500/20 text-green-400 hover:text-green-300 px-4 py-2 rounded-lg text-sm transition-all duration-300"
+                                    className="bg-green-500/10 hover:bg-green-500/20 text-green-400 hover:text-green-300 p-2 rounded-lg text-sm transition-all duration-300"
                                     title="Reativar plano"
                                    >
-                                    <RefreshCw className="w-4 h-4" />
+                                    <RefreshCw className="w-3 h-3" />
                                    </button>
                                  )}
                                </div>

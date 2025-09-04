@@ -1,0 +1,11 @@
+{
+  "name": "apostai-api",
+  "version": "1.0.0",
+  "description": "API endpoints para ApostAI",
+  "dependencies": {
+    "mercadopago": "^2.0.15"
+  },
+  "scripts": {
+    "install-api": "npm install mercadopago"
+  }
+}

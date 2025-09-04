@@ -2,10 +2,12 @@ import React, { useState, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { createPlanPayment, openCheckout } from './lib/payment';
 import SuccessPage from './components/SuccessPage';
+import FailurePage from './components/FailurePage';
+import PendingPage from './components/PendingPage';
 import { Search, TrendingUp, Users, Target, User, ChevronRight, Calendar, MapPin, ArrowLeft, BarChart3, Clock, TrendingDown, AlertTriangle, CheckCircle, Home, ChevronLeft, Menu, X } from 'lucide-react';
 import logo from './assets/logo.png';
 import Admin from './Admin';
-import { supabase, checkUserCredits, deductUserCredit } from './lib/supabase';
+import { supabase, checkUserCredits, deductUserCredit, incrementUserAnalyses } from './lib/supabase';
 
 // Interfaces expandidas para suportar novos dados
 interface Team {
@@ -366,17 +368,27 @@ function App() {
   const isAnalyzeRoute = window.location.pathname === '/analisar';
   const isCheckoutRoute = window.location.pathname === '/checkout';
   
-  // Verificar se estamos na rota de sucesso
+  // Verificar se estamos nas rotas de pagamento
   const isSuccessRoute = window.location.pathname === '/sucesso';
+  const isFailureRoute = window.location.pathname === '/falha';
+  const isPendingRoute = window.location.pathname === '/pendente';
 
   // Se estamos na rota do admin, renderizar o componente Admin
   if (isAdminRoute) {
     return <Admin />;
   }
 
-  // Se estamos na rota de sucesso, renderizar a página de sucesso
+  // Se estamos nas rotas de pagamento, renderizar as páginas correspondentes
   if (isSuccessRoute) {
     return <SuccessPage />;
+  }
+  
+  if (isFailureRoute) {
+    return <FailurePage />;
+  }
+  
+  if (isPendingRoute) {
+    return <PendingPage />;
   }
 
   // Se estamos na rota de checkout, renderizar a página de checkout
@@ -641,15 +653,22 @@ function App() {
 
               {/* Botão de Confirmação com design premium */}
               <button
-                onClick={() => {
-                  const { orderId, paymentUrl } = createPlanPayment(planData.name, planData.price);
-                  localStorage.setItem('currentOrder', JSON.stringify({
-                    orderId,
-                    planName: planData.name,
-                    planPrice: planData.price,
-                    timestamp: Date.now()
-                  }));
-                  openCheckout(paymentUrl);
+                onClick={async () => {
+                  try {
+                    console.log('🔄 Iniciando pagamento do checkout...');
+                    const { orderId, paymentUrl } = await createPlanPayment(planData.name, planData.price);
+                    localStorage.setItem('currentOrder', JSON.stringify({
+                      orderId,
+                      planName: planData.name,
+                      planPrice: planData.price,
+                      timestamp: Date.now()
+                    }));
+                    console.log('🔗 URL de pagamento gerada:', paymentUrl);
+                    openCheckout(paymentUrl);
+                  } catch (error) {
+                    console.error('❌ Erro ao criar pagamento:', error);
+                    alert('Erro ao processar pagamento. Tente novamente.');
+                  }
                 }}
                 className="group w-full bg-gradient-to-r from-[#FF3002] via-[#E02702] to-[#C01F02] hover:from-[#C01F02] hover:via-[#E02702] hover:to-[#FF3002] text-white py-4 lg:py-6 rounded-2xl lg:rounded-3xl font-bold text-lg lg:text-xl transition-all duration-500 hover:shadow-2xl hover:shadow-[#FF3002]/40 transform hover:scale-105 relative overflow-hidden"
               >
@@ -891,20 +910,30 @@ function App() {
     }
   };
 
-  const handlePlanPayment = (planName: string, finalPrice: number) => {
-    // Criar link de pagamento para o plano selecionado
-    const { orderId, paymentUrl } = createPlanPayment(planName, finalPrice);
-    
-    // Salvar informações do pedido no localStorage para verificação posterior
-    localStorage.setItem('currentOrder', JSON.stringify({
-      orderId,
-      planName,
-      planPrice: finalPrice,
-      timestamp: Date.now()
-    }));
-    
-    // Abrir checkout da InfinitePay
-    openCheckout(paymentUrl);
+  const handlePlanPayment = async (planName: string, finalPrice: number) => {
+    try {
+      console.log('🔄 Iniciando processo de pagamento...');
+      
+      // Criar link de pagamento para o plano selecionado
+      const { orderId, paymentUrl } = await createPlanPayment(planName, finalPrice);
+      
+      // Salvar informações do pedido no localStorage para verificação posterior
+      localStorage.setItem('currentOrder', JSON.stringify({
+        orderId,
+        planName,
+        planPrice: finalPrice,
+        timestamp: Date.now()
+      }));
+      
+      console.log('🔗 URL de pagamento gerada:', paymentUrl);
+      console.log('📦 Dados do pedido salvos:', { orderId, planName, finalPrice });
+      
+      // Abrir checkout do Mercado Pago
+      openCheckout(paymentUrl);
+    } catch (error) {
+      console.error('❌ Erro ao criar pagamento:', error);
+      alert('Erro ao processar pagamento. Tente novamente.');
+    }
   };
 
   // Função para verificar e renovar créditos diários
@@ -4086,7 +4115,18 @@ function App() {
           setCurrentBetIndex(0); // Resetar para primeira aposta
           setTotalBetsGenerated(availableBets.length); // Definir total de apostas
           
-          // Descontar crédito após gerar apostas com sucesso
+          // Incrementar análises para todos os usuários
+          console.log('📊 Incrementando análises para usuário:', currentUser.id);
+          const analysesResult = await incrementUserAnalyses(currentUser.id);
+          if (analysesResult.success) {
+            // Atualizar usuário local com nova contagem de análises
+            setCurrentUser((prev: any) => prev ? { ...prev, analyses: (prev.analyses || 0) + 1 } : null);
+            console.log('✅ Análises incrementadas com sucesso');
+          } else {
+            console.error('❌ Erro ao incrementar análises:', analysesResult.error);
+          }
+
+          // Descontar crédito após gerar apostas com sucesso (apenas para não-Premium)
           if (plan !== 'Premium') {
             console.log('🔍 Iniciando desconto de crédito para usuário não-Premium');
             const deductionResult = await deductUserCredit(currentUser.id);
@@ -4376,7 +4416,7 @@ function App() {
 
               {/* Botão de Confirmação */}
               <button
-                onClick={() => handlePlanPayment(selectedPlan.name, Math.round(finalPrice))}
+                onClick={async () => await handlePlanPayment(selectedPlan.name, Math.round(finalPrice))}
                 className="w-full bg-gradient-to-r from-[#FF3002] to-[#E02702] hover:from-[#E02702] hover:to-[#C01F02] text-white py-4 rounded-xl font-bold text-lg transition-all duration-300 hover:shadow-2xl hover:shadow-[#FF3002]/30 transform hover:scale-105"
               >
                 Confirmar e Pagar

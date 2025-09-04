@@ -157,51 +157,95 @@ export const deductUserCredit = async (userId: string): Promise<{ success: boole
       return { success: false, creditsLeft: 0, error: 'Sem créditos disponíveis' };
     }
 
-    // Se for Premium, não desconta (créditos ilimitados)
+    let newCredits = creditCheck.creditsLeft;
+    let shouldUpdateCredits = true;
+
+    // Se for Premium, não desconta créditos (mas ainda incrementa análises)
     if (creditCheck.plan === 'Premium') {
-      console.log('💎 Usuário Premium - sem desconto de créditos');
-      return { success: true, creditsLeft: 999, error: undefined };
+      console.log('💎 Usuário Premium - créditos ilimitados, mas incrementando análises');
+      shouldUpdateCredits = false;
+    } else {
+      console.log('🔍 Descontando crédito. Créditos atuais:', creditCheck.creditsLeft, 'Novos créditos:', creditCheck.creditsLeft - 1);
+      newCredits = creditCheck.creditsLeft - 1;
     }
 
-    console.log('🔍 Descontando crédito. Créditos atuais:', creditCheck.creditsLeft, 'Novos créditos:', creditCheck.creditsLeft - 1);
-    
-    // Desconta um crédito e incrementa o contador de análises
+    // Se for Premium, não precisa fazer nada (créditos ilimitados)
+    if (!shouldUpdateCredits) {
+      console.log('💎 Usuário Premium - nenhuma atualização necessária');
+      return { 
+        success: true, 
+        creditsLeft: 999, 
+        error: undefined 
+      };
+    }
+
+    // Para usuários não-Premium, descontar crédito
     const { data, error } = await supabase
       .from('users')
-      .update({ 
-        credits: creditCheck.creditsLeft - 1
-      })
+      .update({ credits: newCredits })
       .eq('id', userId)
       .eq('status', 'active')
-      .select('credits, analyses')
+      .select('credits')
       .single();
 
     if (error) {
-      console.error('❌ Erro ao descontar crédito:', error);
+      console.error('❌ Erro ao atualizar créditos:', error);
       return { success: false, creditsLeft: creditCheck.creditsLeft, error: 'Erro ao atualizar créditos' };
     }
 
-    console.log('✅ Crédito descontado com sucesso. Novos créditos:', data.credits);
+    console.log('✅ Créditos atualizados com sucesso:', {
+      credits: data.credits,
+      isPremium: false
+    });
 
-    // Incrementar análises em uma operação separada
-    const { error: analysesError } = await supabase
-      .from('users')
-      .update({ 
-        analyses: (data.analyses || 0) + 1
-      })
-      .eq('id', userId);
-
-    if (analysesError) {
-      console.error('⚠️ Erro ao incrementar análises:', analysesError);
-      // Não falha se não conseguir incrementar análises, mas loga o erro
-    } else {
-      console.log('✅ Análises incrementadas com sucesso');
-    }
-
-    return { success: true, creditsLeft: data.credits, error: undefined };
+    return { 
+      success: true, 
+      creditsLeft: data.credits, 
+      error: undefined 
+    };
   } catch (error) {
     console.error('Erro ao descontar crédito:', error);
     return { success: false, creditsLeft: 0, error: 'Erro interno' };
+  }
+};
+
+// Função para incrementar apenas análises (sem mexer nos créditos)
+export const incrementUserAnalyses = async (userId: string): Promise<{ success: boolean; error?: string }> => {
+  try {
+    console.log('📊 Incrementando análises para usuário:', userId);
+    
+    // Buscar dados atuais do usuário
+    const { data: currentData, error: fetchError } = await supabase
+      .from('users')
+      .select('analyses')
+      .eq('id', userId)
+      .eq('status', 'active')
+      .single();
+
+    if (fetchError) {
+      console.error('❌ Erro ao buscar dados do usuário:', fetchError);
+      return { success: false, error: 'Erro ao buscar dados do usuário' };
+    }
+
+    // Incrementar análises
+    const { error } = await supabase
+      .from('users')
+      .update({ 
+        analyses: (currentData.analyses || 0) + 1
+      })
+      .eq('id', userId)
+      .eq('status', 'active');
+
+    if (error) {
+      console.error('❌ Erro ao incrementar análises:', error);
+      return { success: false, error: 'Erro ao incrementar análises' };
+    }
+
+    console.log('✅ Análises incrementadas com sucesso');
+    return { success: true };
+  } catch (error) {
+    console.error('Erro ao incrementar análises:', error);
+    return { success: false, error: 'Erro interno' };
   }
 };
 
