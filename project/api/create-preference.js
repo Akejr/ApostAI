@@ -5,7 +5,7 @@ const mercadopago = require('mercadopago');
 
 // Configurar Mercado Pago com suas credenciais
 mercadopago.configure({
-  access_token: process.env.MERCADOPAGO_ACCESS_TOKEN
+  access_token: process.env.MERCADOPAGO_ACCESS_TOKEN || 'APP_USR-4948508052320612-090417-52cf3c977b061c03b25a0bbd84920dd3-1423321368'
 });
 
 export default async function handler(req, res) {

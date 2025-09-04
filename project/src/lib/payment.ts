@@ -1,9 +1,9 @@
 // Configurações do Mercado Pago
 const MERCADOPAGO_CONFIG = {
-  accessToken: process.env.VITE_MERCADOPAGO_ACCESS_TOKEN || '',
-  publicKey: process.env.VITE_MERCADOPAGO_PUBLIC_KEY || '',
-  clientId: process.env.VITE_MERCADOPAGO_CLIENT_ID || '',
-  clientSecret: process.env.VITE_MERCADOPAGO_CLIENT_SECRET || '',
+  accessToken: process.env.VITE_MERCADOPAGO_ACCESS_TOKEN || 'APP_USR-4948508052320612-090417-52cf3c977b061c03b25a0bbd84920dd3-1423321368',
+  publicKey: process.env.VITE_MERCADOPAGO_PUBLIC_KEY || 'APP_USR-9a93521a-da15-453e-96c8-900600a6d124',
+  clientId: process.env.VITE_MERCADOPAGO_CLIENT_ID || '4948508052320612',
+  clientSecret: process.env.VITE_MERCADOPAGO_CLIENT_SECRET || 'S4yxQc1IMuyoBMJn8r1WzmhIUKYCL90c',
   baseUrl: 'https://api.mercadopago.com',
   checkoutUrl: 'https://www.mercadopago.com.br/checkout/v1/redirect',
   companyName: 'ApostAI - Apostas de futebol inteligentes'
@@ -368,7 +368,7 @@ export const processMercadoPagoWebhook = async (webhookData: any): Promise<{
 };
 
 // Função para validar assinatura do webhook (segurança)
-export const validateWebhookSignature = (signature: string, body: string, secret: string = process.env.VITE_MERCADOPAGO_WEBHOOK_SECRET || ''): boolean => {
+export const validateWebhookSignature = (signature: string, body: string, secret: string = process.env.VITE_MERCADOPAGO_WEBHOOK_SECRET || 'a31984476039e38c886fc7a688a830d3bb52817b2ab5d8fce68866e1d899e98f'): boolean => {
   try {
     // Em ambiente de produção, isso seria feito no backend
     // Esta função é apenas para referência
