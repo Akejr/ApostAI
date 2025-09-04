@@ -1,8 +1,8 @@
 // Webhook do Mercado Pago para Vercel Functions
 // Este arquivo deve estar em /api/webhook/mercadopago.js
 
-import { createClient } from '@supabase/supabase-js';
-import crypto from 'crypto';
+const { createClient } = require('@supabase/supabase-js');
+const crypto = require('crypto');
 
 // Configurações do Supabase (use as mesmas do seu projeto)
 const supabaseUrl = process.env.SUPABASE_URL;
@@ -28,7 +28,7 @@ function validateWebhookSignature(body, signature, secret) {
   }
 }
 
-export default async function handler(req, res) {
+module.exports = async function handler(req, res) {
   // Permitir apenas POST
   if (req.method !== 'POST') {
     return res.status(405).json({ error: 'Method not allowed' });
@@ -180,7 +180,7 @@ export default async function handler(req, res) {
 }
 
 // Configuração para Vercel
-export const config = {
+module.exports.config = {
   api: {
     bodyParser: {
       sizeLimit: '1mb',
