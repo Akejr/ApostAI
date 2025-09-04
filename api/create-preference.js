@@ -1,12 +1,5 @@
-// Endpoint para criar preferência de pagamento no Mercado Pago
-// Este arquivo funciona como Vercel Function
-
-const mercadopago = require('mercadopago');
-
-// Configurar Mercado Pago com suas credenciais
-mercadopago.configure({
-  access_token: process.env.MERCADOPAGO_ACCESS_TOKEN || 'APP_USR-4948508052320612-090417-52cf3c977b061c03b25a0bbd84920dd3-1423321368'
-});
+// Endpoint para criar assinatura no Mercado Pago
+// Baseado na documentação oficial: https://www.mercadopago.com.br/developers/pt/docs/subscriptions/overview
 
 export default async function handler(req, res) {
   // Configurar CORS
@@ -26,71 +19,75 @@ export default async function handler(req, res) {
 
   try {
     const { planName, price, orderId, customerData } = req.body;
+    const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN || 'APP_USR-4948508052320612-090417-52cf3c977b061c03b25a0bbd84920dd3-1423321368';
 
-    console.log('🔄 Criando preferência:', { planName, price, orderId });
+    console.log('🔄 Criando assinatura no Mercado Pago:', { planName, price, orderId });
 
-    // Criar preferência de pagamento
-    const preference = {
-      items: [
-        {
-          id: `plan_${orderId}`,
-          title: planName,
-          description: `${planName} - ApostAI - Apostas de futebol inteligentes`,
-          quantity: 1,
-          unit_price: price / 100, // Converter centavos para reais
-          currency_id: 'BRL'
-        }
-      ],
-      payer: customerData ? {
-        name: customerData.name,
-        email: customerData.email,
-        phone: customerData.cellphone ? {
-          number: customerData.cellphone
-        } : undefined
-      } : undefined,
-      back_urls: {
-        success: `${req.headers.origin || 'http://localhost:5173'}/sucesso`,
-        failure: `${req.headers.origin || 'http://localhost:5173'}/falha`,
-        pending: `${req.headers.origin || 'http://localhost:5173'}/pendente`
-      },
-      auto_return: 'approved',
-      external_reference: orderId,
-      notification_url: `${req.headers.origin || 'http://localhost:5173'}/api/webhook/mercadopago`,
-      payment_methods: {
-        installments: 12, // Máximo 12 parcelas
-        excluded_payment_types: [
-          // Descomente se quiser excluir algum método
-          // { id: 'ticket' } // Excluir boleto
-        ]
-      },
-      statement_descriptor: 'APOSTAI',
-      expires: true,
-      expiration_date_from: new Date().toISOString(),
-      expiration_date_to: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString() // 24 horas
+    // Mapear planos para frequência de cobrança
+    const planFrequency = {
+      'Plano Básico': { frequency: 1, frequency_type: 'months' },
+      'Plano Pro': { frequency: 1, frequency_type: 'months' },
+      'Plano Premium': { frequency: 1, frequency_type: 'months' }
     };
 
-    console.log('📋 Dados da preferência:', preference);
+    const frequency = planFrequency[planName] || { frequency: 1, frequency_type: 'months' };
 
-    // Criar preferência no Mercado Pago
-    const response = await mercadopago.preferences.create(preference);
+    // Criar assinatura sem plano associado (mais flexível)
+    const subscriptionData = {
+      reason: `${planName} - ApostAI - Apostas de futebol inteligentes`,
+      auto_recurring: {
+        frequency: frequency.frequency,
+        frequency_type: frequency.frequency_type,
+        transaction_amount: price / 100, // Converter centavos para reais
+        currency_id: 'BRL'
+      },
+      back_url: `${req.headers.origin || 'http://localhost:5173'}/sucesso`,
+      payer_email: customerData?.email || 'cliente@apostai.com',
+      external_reference: orderId,
+      status: 'pending'
+    };
 
-    console.log('✅ Preferência criada com sucesso:', response.body.id);
+    console.log('📋 Dados da assinatura:', subscriptionData);
+
+    // Fazer requisição para API de Assinaturas do Mercado Pago
+    const response = await fetch('https://api.mercadopago.com/preapproval', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(subscriptionData)
+    });
+
+    console.log('📡 Status da resposta:', response.status);
+
+    if (!response.ok) {
+      const errorData = await response.text();
+      console.error('❌ Erro na API do MP:', errorData);
+      return res.status(response.status).json({
+        success: false,
+        error: 'Erro na API do Mercado Pago',
+        message: errorData
+      });
+    }
+
+    const data = await response.json();
+    console.log('✅ Assinatura criada:', data);
 
     return res.status(200).json({
       success: true,
-      preferenceId: response.body.id,
-      initPoint: response.body.init_point,
-      sandboxInitPoint: response.body.sandbox_init_point
+      subscriptionId: data.id,
+      initPoint: data.init_point,
+      status: data.status
     });
 
   } catch (error) {
-    console.error('❌ Erro ao criar preferência:', error);
+    console.error('❌ Erro ao criar assinatura:', error);
     
     return res.status(500).json({
       success: false,
       error: 'Erro interno do servidor',
-      message: error.message,
-      details: error.response?.data || error
+      message: error.message
     });
   }
 }

@@ -56,7 +56,7 @@ export default async function handler(req, res) {
 
     const { type, data } = req.body;
 
-    // Verificar se é notificação de pagamento
+    // Verificar se é notificação de pagamento ou assinatura
     if (type === 'payment') {
       const paymentId = data?.id;
       
@@ -87,14 +87,9 @@ export default async function handler(req, res) {
         const externalReference = payment.external_reference;
         
         if (externalReference) {
-          // Aqui você pode processar o pagamento aprovado
-          // Por exemplo, ativar o usuário no banco de dados
           console.log(`✅ Pagamento aprovado! Order ID: ${externalReference}`);
           
-          // Buscar dados do pedido (se você armazenar em algum lugar)
-          // e ativar o usuário correspondente
-          
-          // Exemplo de como você poderia ativar um usuário:
+          // Ativar usuário no banco de dados
           /*
           const { data: userData, error } = await supabase
             .from('users')
@@ -110,10 +105,62 @@ export default async function handler(req, res) {
         }
       } else if (payment.status === 'rejected') {
         console.log(`❌ Pagamento rejeitado! Order ID: ${payment.external_reference}`);
-        // Aqui você pode processar pagamento rejeitado
       } else {
         console.log(`⏳ Pagamento pendente! Status: ${payment.status}`);
-        // Aqui você pode processar pagamento pendente
+      }
+    }
+    
+    // Verificar se é notificação de assinatura
+    if (type === 'subscription_preapproval') {
+      const subscriptionId = data?.id;
+      
+      if (!subscriptionId) {
+        console.log('❌ Subscription ID não encontrado');
+        return res.status(400).json({ error: 'Subscription ID not found' });
+      }
+
+      // Buscar detalhes da assinatura na API do Mercado Pago
+      const subscriptionResponse = await fetch(`https://api.mercadopago.com/preapproval/${subscriptionId}`, {
+        method: 'GET',
+        headers: {
+          'Authorization': `Bearer ${MERCADOPAGO_ACCESS_TOKEN}`,
+          'Content-Type': 'application/json',
+        },
+      });
+
+      if (!subscriptionResponse.ok) {
+        console.log('❌ Erro ao buscar assinatura:', subscriptionResponse.status);
+        return res.status(400).json({ error: 'Failed to fetch subscription details' });
+      }
+
+      const subscription = await subscriptionResponse.json();
+      console.log('📋 Detalhes da assinatura:', subscription);
+
+      // Verificar se a assinatura foi aprovada
+      if (subscription.status === 'authorized') {
+        const externalReference = subscription.external_reference;
+        
+        if (externalReference) {
+          console.log(`✅ Assinatura aprovada! Order ID: ${externalReference}`);
+          
+          // Ativar usuário no banco de dados
+          /*
+          const { data: userData, error } = await supabase
+            .from('users')
+            .update({ status: 'active' })
+            .eq('order_id', externalReference);
+          
+          if (error) {
+            console.error('❌ Erro ao ativar usuário:', error);
+          } else {
+            console.log('✅ Usuário ativado com sucesso');
+          }
+          */
+        }
+      } else if (subscription.status === 'cancelled') {
+        console.log(`❌ Assinatura cancelada! Order ID: ${subscription.external_reference}`);
+      } else {
+        console.log(`⏳ Assinatura pendente! Status: ${subscription.status}`);
       }
     }
 
