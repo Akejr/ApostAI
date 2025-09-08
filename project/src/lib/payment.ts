@@ -101,6 +101,7 @@ export const createMercadoPagoPreference = async (
         failure: `${window.location.origin || 'https://apostai-sistema.vercel.app'}/falha`,
         pending: `${window.location.origin || 'https://apostai-sistema.vercel.app'}/pendente`
       },
+      auto_return: 'approved',
       external_reference: orderId,
       notification_url: `${window.location.origin || 'https://apostai-sistema.vercel.app'}/api/webhook/mercadopago`,
       payment_methods: {
@@ -535,4 +536,76 @@ export const validateWebhookSignature = (signature: string, body: string, secret
     console.error('❌ Erro ao validar assinatura:', error);
     return false;
   }
+};
+
+// Função para verificar status do pagamento e redirecionar automaticamente
+export const checkPaymentAndRedirect = async (orderId: string) => {
+  try {
+    console.log('🔍 Verificando status do pagamento...', orderId);
+    
+    // Verificar se há dados do pedido no localStorage
+    const currentOrder = localStorage.getItem('currentOrder');
+    if (!currentOrder) {
+      console.log('❌ Dados do pedido não encontrados');
+      return false;
+    }
+    
+    const orderData = JSON.parse(currentOrder);
+    
+    // Fazer requisição para verificar status do pagamento
+    const response = await fetch(`${window.location.origin}/api/check-payment-status`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({
+        orderId: orderId,
+        externalReference: orderId
+      })
+    });
+    
+    if (response.ok) {
+      const result = await response.json();
+      console.log('📊 Status do pagamento:', result);
+      
+      if (result.status === 'approved' || result.status === 'completed') {
+        console.log('✅ Pagamento aprovado! Redirecionando...');
+        // Redirecionar para página de sucesso
+        window.location.href = `${window.location.origin}/sucesso?payment_id=${result.paymentId}&status=approved&external_reference=${orderId}`;
+        return true;
+      }
+    }
+    
+    return false;
+  } catch (error) {
+    console.error('❌ Erro ao verificar pagamento:', error);
+    return false;
+  }
+};
+
+// Função para iniciar verificação periódica do pagamento
+export const startPaymentPolling = (orderId: string, maxAttempts: number = 60) => {
+  let attempts = 0;
+  
+  const pollPayment = async () => {
+    attempts++;
+    console.log(`🔄 Tentativa ${attempts}/${maxAttempts} de verificação do pagamento`);
+    
+    const isPaid = await checkPaymentAndRedirect(orderId);
+    
+    if (isPaid) {
+      console.log('✅ Pagamento confirmado! Parando verificação...');
+      return;
+    }
+    
+    if (attempts < maxAttempts) {
+      // Verificar novamente em 10 segundos
+      setTimeout(pollPayment, 10000);
+    } else {
+      console.log('⏰ Timeout: Parando verificação automática do pagamento');
+    }
+  };
+  
+  // Iniciar verificação após 5 segundos
+  setTimeout(pollPayment, 5000);
 };

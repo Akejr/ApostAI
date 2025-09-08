@@ -1,10 +1,11 @@
 import React, { useState, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { createPlanPayment, createPixPayment, createSubscriptionPayment, openCheckout } from './lib/payment';
+import { createPlanPayment, createPixPayment, createSubscriptionPayment, openCheckout, startPaymentPolling } from './lib/payment';
 import SuccessPage from './components/SuccessPage';
 import FailurePage from './components/FailurePage';
 import PendingPage from './components/PendingPage';
 import PaymentMethodSelector from './components/PaymentMethodSelector';
+import PaymentStatusChecker from './components/PaymentStatusChecker';
 import { Search, TrendingUp, Users, Target, User, ChevronRight, Calendar, MapPin, ArrowLeft, BarChart3, Clock, TrendingDown, AlertTriangle, CheckCircle, Home, ChevronLeft, Menu, X } from 'lucide-react';
 import logo from './assets/logo.png';
 import Admin from './Admin';
@@ -692,6 +693,15 @@ function App() {
                       timestamp: Date.now()
                     }));
                     console.log('🔗 URL de pagamento gerada:', paymentUrl);
+                    
+                    // Salvar orderId e mostrar verificador de pagamento
+                    setCurrentOrderId(orderId);
+                    setShowPaymentChecker(true);
+                    
+                    // Iniciar verificação automática do pagamento
+                    console.log('🔄 Iniciando verificação automática do pagamento...');
+                    startPaymentPolling(orderId);
+                    
                     openCheckout(paymentUrl);
                   } catch (error) {
                     console.error('❌ Erro ao criar pagamento:', error);
@@ -799,6 +809,18 @@ function App() {
   
   // Estados para cupom (SISTEMA UNIFICADO)
   const [couponCode, setCouponCode] = useState('');
+  
+  // Estados para verificação de pagamento
+  const [showPaymentChecker, setShowPaymentChecker] = useState(false);
+  const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
+  
+  // Função para lidar com confirmação de pagamento
+  const handlePaymentConfirmed = () => {
+    console.log('✅ Pagamento confirmado! Redirecionando para página de sucesso...');
+    setShowPaymentChecker(false);
+    // Redirecionar para página de sucesso
+    window.location.href = `${window.location.origin}/sucesso?payment_id=confirmed&status=approved&external_reference=${currentOrderId}`;
+  };
 
   // Monitor mudanças no cupom aplicado - movido para escopo do checkout
   
@@ -6659,6 +6681,14 @@ function App() {
             </form>
           </div>
         </div>
+      )}
+      
+      {/* Verificador de Status de Pagamento */}
+      {showPaymentChecker && currentOrderId && (
+        <PaymentStatusChecker
+          orderId={currentOrderId}
+          onPaymentConfirmed={handlePaymentConfirmed}
+        />
       )}
     </div>
   );
