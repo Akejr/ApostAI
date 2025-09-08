@@ -97,13 +97,13 @@ export const createMercadoPagoPreference = async (
         email: customerData?.email || 'cliente@apostai.com'
       },
       back_urls: {
-        success: `${window.location.origin || 'https://apostai-sistema.vercel.app'}/sucesso`,
-        failure: `${window.location.origin || 'https://apostai-sistema.vercel.app'}/falha`,
-        pending: `${window.location.origin || 'https://apostai-sistema.vercel.app'}/pendente`
+        success: 'https://apostai-sistema.vercel.app/sucesso',
+        failure: 'https://apostai-sistema.vercel.app/falha',
+        pending: 'https://apostai-sistema.vercel.app/pendente'
       },
       auto_return: 'approved',
       external_reference: orderId,
-      notification_url: `${window.location.origin || 'https://apostai-sistema.vercel.app'}/api/webhook/mercadopago`,
+      notification_url: 'https://apostai-sistema.vercel.app/api/webhook/mercadopago',
       payment_methods: {
         installments: 12, // Máximo 12 parcelas
         excluded_payment_types: [
