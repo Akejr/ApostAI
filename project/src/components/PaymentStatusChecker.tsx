@@ -58,7 +58,7 @@ const PaymentStatusChecker: React.FC<PaymentStatusCheckerProps> = ({ orderId, on
 
   return (
     <div className="fixed bottom-4 right-4 z-50">
-      <div className="bg-white rounded-lg shadow-lg p-4 border border-gray-200">
+      <div className="bg-white rounded-lg shadow-lg p-4 border border-gray-200 max-w-sm">
         <div className="flex items-center space-x-3">
           <div className="flex-shrink-0">
             {isChecking ? (
@@ -79,6 +79,9 @@ const PaymentStatusChecker: React.FC<PaymentStatusCheckerProps> = ({ orderId, on
                 Última verificação: {lastCheck.toLocaleTimeString()}
               </p>
             )}
+            <p className="text-xs text-blue-600 mt-1">
+              💡 Dica: Volte para esta aba após pagar
+            </p>
           </div>
           <button
             onClick={checkPaymentStatus}

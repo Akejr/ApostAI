@@ -222,9 +222,37 @@ export const checkPaymentStatusFallback = (
   return { success: false, paid: false };
 };
 
-// Função para abrir checkout em nova aba (mantida para compatibilidade)
+// Função para abrir checkout em nova aba com monitoramento
 export const openCheckout = (paymentUrl: string): void => {
-  window.open(paymentUrl, '_blank');
+  const popup = window.open(paymentUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
+  
+  if (popup) {
+    console.log('🪟 Janela de pagamento aberta, iniciando monitoramento...');
+    
+    // Monitorar se a janela foi fechada
+    const checkClosed = setInterval(() => {
+      if (popup.closed) {
+        clearInterval(checkClosed);
+        console.log('🪟 Janela de pagamento foi fechada! Verificando status...');
+        
+        // Aguardar um pouco e verificar o status
+        setTimeout(() => {
+          const currentOrder = localStorage.getItem('currentOrder');
+          if (currentOrder) {
+            const orderData = JSON.parse(currentOrder);
+            console.log('🔍 Verificando pagamento após fechamento da janela...', orderData.orderId);
+            checkPaymentAndRedirect(orderData.orderId);
+          }
+        }, 2000);
+      }
+    }, 1000);
+    
+    // Limpar o interval após 10 minutos
+    setTimeout(() => {
+      clearInterval(checkClosed);
+      console.log('⏰ Monitoramento da janela de pagamento finalizado');
+    }, 600000);
+  }
 };
 
 // Função para criar link de análise de time (mantida para compatibilidade)
@@ -543,6 +571,14 @@ export const checkPaymentAndRedirect = async (orderId: string) => {
   try {
     console.log('🔍 Verificando status do pagamento...', orderId);
     
+    // Estratégia 1: Verificar se já foi confirmado no sessionStorage
+    const paymentConfirmed = sessionStorage.getItem(`payment_confirmed_${orderId}`);
+    if (paymentConfirmed) {
+      console.log('✅ Pagamento já confirmado via sessionStorage! Redirecionando...');
+      window.location.href = `${window.location.origin}/sucesso?payment_id=confirmed&status=approved&external_reference=${orderId}`;
+      return true;
+    }
+    
     // Verificar se há dados do pedido no localStorage
     const currentOrder = localStorage.getItem('currentOrder');
     if (!currentOrder) {
@@ -553,7 +589,7 @@ export const checkPaymentAndRedirect = async (orderId: string) => {
     const orderData = JSON.parse(currentOrder);
     console.log('📋 Dados do pedido:', orderData);
     
-    // Fazer requisição para verificar status do pagamento
+    // Estratégia 2: Verificar via API do Mercado Pago
     const apiUrl = `${window.location.origin}/api/check-payment-status`;
     console.log('🌐 Fazendo requisição para:', apiUrl);
     
@@ -575,7 +611,15 @@ export const checkPaymentAndRedirect = async (orderId: string) => {
       console.log('📊 Status do pagamento:', result);
       
       if (result.status === 'approved' || result.status === 'completed') {
-        console.log('✅ Pagamento aprovado! Redirecionando...');
+        console.log('✅ Pagamento aprovado! Salvando no sessionStorage e redirecionando...');
+        
+        // Salvar confirmação no sessionStorage para evitar verificações desnecessárias
+        sessionStorage.setItem(`payment_confirmed_${orderId}`, JSON.stringify({
+          status: result.status,
+          paymentId: result.paymentId,
+          timestamp: Date.now()
+        }));
+        
         // Redirecionar para página de sucesso
         window.location.href = `${window.location.origin}/sucesso?payment_id=${result.paymentId}&status=approved&external_reference=${orderId}`;
         return true;
@@ -594,13 +638,17 @@ export const checkPaymentAndRedirect = async (orderId: string) => {
   }
 };
 
-// Função para iniciar verificação periódica do pagamento
+// Função para iniciar verificação periódica do pagamento com múltiplas estratégias
 export const startPaymentPolling = (orderId: string, maxAttempts: number = 120) => {
   let attempts = 0;
+  let isPollingActive = true;
   
   console.log('🚀 Iniciando verificação automática do pagamento...', orderId);
   
+  // Estratégia 1: Verificação periódica normal
   const pollPayment = async () => {
+    if (!isPollingActive) return;
+    
     attempts++;
     console.log(`🔄 Tentativa ${attempts}/${maxAttempts} de verificação do pagamento`);
     
@@ -608,19 +656,63 @@ export const startPaymentPolling = (orderId: string, maxAttempts: number = 120) 
     
     if (isPaid) {
       console.log('✅ Pagamento confirmado! Parando verificação...');
+      isPollingActive = false;
       return;
     }
     
-    if (attempts < maxAttempts) {
+    if (attempts < maxAttempts && isPollingActive) {
       // Verificar novamente em 5 segundos (mais frequente)
       console.log('⏳ Aguardando 5 segundos para próxima verificação...');
       setTimeout(pollPayment, 5000);
     } else {
       console.log('⏰ Timeout: Parando verificação automática do pagamento após', maxAttempts, 'tentativas');
+      isPollingActive = false;
     }
   };
+  
+  // Estratégia 2: Verificação quando a janela ganha foco (usuário volta da janela de pagamento)
+  const handleWindowFocus = async () => {
+    if (!isPollingActive) return;
+    
+    console.log('👁️ Janela ganhou foco! Verificando pagamento...');
+    const isPaid = await checkPaymentAndRedirect(orderId);
+    
+    if (isPaid) {
+      console.log('✅ Pagamento confirmado via focus! Parando verificação...');
+      isPollingActive = false;
+      window.removeEventListener('focus', handleWindowFocus);
+    }
+  };
+  
+  // Estratégia 3: Verificação quando a janela fica visível (mudança de aba)
+  const handleVisibilityChange = async () => {
+    if (!isPollingActive) return;
+    
+    if (!document.hidden) {
+      console.log('👁️ Página ficou visível! Verificando pagamento...');
+      const isPaid = await checkPaymentAndRedirect(orderId);
+      
+      if (isPaid) {
+        console.log('✅ Pagamento confirmado via visibility! Parando verificação...');
+        isPollingActive = false;
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      }
+    }
+  };
+  
+  // Adicionar event listeners
+  window.addEventListener('focus', handleWindowFocus);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
   
   // Iniciar verificação após 3 segundos
   console.log('⏰ Iniciando verificação em 3 segundos...');
   setTimeout(pollPayment, 3000);
+  
+  // Limpar event listeners após 10 minutos
+  setTimeout(() => {
+    isPollingActive = false;
+    window.removeEventListener('focus', handleWindowFocus);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    console.log('⏰ Verificação automática finalizada após 10 minutos');
+  }, 600000);
 };
