@@ -412,6 +412,18 @@ function App() {
       discount_percentage: number;
     } | null>(null);
     
+    // Estados para verificação de pagamento - LOCAL para checkout
+    const [showPaymentChecker, setShowPaymentChecker] = useState(false);
+    const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
+    
+    // Função para lidar com confirmação de pagamento
+    const handlePaymentConfirmed = () => {
+      console.log('✅ Pagamento confirmado! Redirecionando para página de sucesso...');
+      setShowPaymentChecker(false);
+      // Redirecionar para página de sucesso
+      window.location.href = `${window.location.origin}/sucesso?payment_id=confirmed&status=approved&external_reference=${currentOrderId}`;
+    };
+    
     // Função para mostrar notificações personalizadas
     const showCheckoutNotificationMessage = (message: string, type: 'success' | 'error' = 'success') => {
       setCheckoutNotificationMessage(message);
@@ -755,6 +767,14 @@ function App() {
             </div>
           </div>
         )}
+        
+        {/* Verificador de Status de Pagamento */}
+        {showPaymentChecker && currentOrderId && (
+          <PaymentStatusChecker
+            orderId={currentOrderId}
+            onPaymentConfirmed={handlePaymentConfirmed}
+          />
+        )}
       </div>
     );
   }
@@ -810,17 +830,7 @@ function App() {
   // Estados para cupom (SISTEMA UNIFICADO)
   const [couponCode, setCouponCode] = useState('');
   
-  // Estados para verificação de pagamento
-  const [showPaymentChecker, setShowPaymentChecker] = useState(false);
-  const [currentOrderId, setCurrentOrderId] = useState<string | null>(null);
-  
-  // Função para lidar com confirmação de pagamento
-  const handlePaymentConfirmed = () => {
-    console.log('✅ Pagamento confirmado! Redirecionando para página de sucesso...');
-    setShowPaymentChecker(false);
-    // Redirecionar para página de sucesso
-    window.location.href = `${window.location.origin}/sucesso?payment_id=confirmed&status=approved&external_reference=${currentOrderId}`;
-  };
+  // Função para lidar com confirmação de pagamento - será definida no escopo do checkout
 
   // Monitor mudanças no cupom aplicado - movido para escopo do checkout
   
@@ -6681,14 +6691,6 @@ function App() {
             </form>
           </div>
         </div>
-      )}
-      
-      {/* Verificador de Status de Pagamento */}
-      {showPaymentChecker && currentOrderId && (
-        <PaymentStatusChecker
-          orderId={currentOrderId}
-          onPaymentConfirmed={handlePaymentConfirmed}
-        />
       )}
     </div>
   );
