@@ -1,9 +1,9 @@
 // Configurações do Mercado Pago
 const MERCADOPAGO_CONFIG = {
-  accessToken: process.env.VITE_MERCADOPAGO_ACCESS_TOKEN || 'APP_USR-4948508052320612-090417-52cf3c977b061c03b25a0bbd84920dd3-1423321368',
-  publicKey: process.env.VITE_MERCADOPAGO_PUBLIC_KEY || 'APP_USR-9a93521a-da15-453e-96c8-900600a6d124',
-  clientId: process.env.VITE_MERCADOPAGO_CLIENT_ID || '4948508052320612',
-  clientSecret: process.env.VITE_MERCADOPAGO_CLIENT_SECRET || 'S4yxQc1IMuyoBMJn8r1WzmhIUKYCL90c',
+  accessToken: import.meta.env.VITE_MERCADOPAGO_ACCESS_TOKEN || 'APP_USR-4948508052320612-090417-52cf3c977b061c03b25a0bbd84920dd3-1423321368',
+  publicKey: import.meta.env.VITE_MERCADOPAGO_PUBLIC_KEY || 'APP_USR-9a93521a-da15-453e-96c8-900600a6d124',
+  clientId: import.meta.env.VITE_MERCADOPAGO_CLIENT_ID || '4948508052320612',
+  clientSecret: import.meta.env.VITE_MERCADOPAGO_CLIENT_SECRET || 'S4yxQc1IMuyoBMJn8r1WzmhIUKYCL90c',
   baseUrl: 'https://api.mercadopago.com',
   checkoutUrl: 'https://www.mercadopago.com.br/checkout/v1/redirect',
   companyName: 'ApostAI - Apostas de futebol inteligentes'
@@ -71,31 +71,38 @@ export const createMercadoPagoPreference = async (
 ): Promise<{ preferenceId: string; initPoint: string } | null> => {
   try {
     console.log('🔄 Criando preferência no Mercado Pago...');
+    console.log('💰 Items recebidos na função createMercadoPagoPreference:', items);
     
     const preference: MercadoPagoPreference = {
-      items: items.map(item => ({
-        id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
-        title: item.name,
-        description: `Plano ${item.name} - ${MERCADOPAGO_CONFIG.companyName}`,
-        quantity: item.quantity,
-        unit_price: item.price / 100, // Converter centavos para reais
-        currency_id: 'BRL'
-      })),
-      payer: customerData ? {
-        name: customerData.name,
-        email: customerData.email,
-        phone: customerData.cellphone ? {
-          number: customerData.cellphone
-        } : undefined
-      } : undefined,
-      back_urls: {
-        success: `${window.location.origin}/sucesso`,
-        failure: `${window.location.origin}/falha`,
-        pending: `${window.location.origin}/pendente`
+      items: items.map(item => {
+        const unitPrice = item.price / 100; // Converter centavos para reais
+        console.log('💰 Conversão de preço no item:', {
+          itemName: item.name,
+          priceInCents: item.price,
+          priceInReais: unitPrice,
+          quantity: item.quantity
+        });
+        
+        return {
+          id: `item_${Date.now()}_${Math.random().toString(36).substr(2, 5)}`,
+          title: item.name,
+          description: `Plano ${item.name} - ${MERCADOPAGO_CONFIG.companyName}`,
+          quantity: item.quantity,
+          unit_price: unitPrice,
+          currency_id: 'BRL'
+        };
+      }),
+      payer: {
+        name: customerData?.name || 'Cliente',
+        email: customerData?.email || 'cliente@apostai.com'
       },
-      auto_return: 'approved',
+      back_urls: {
+        success: `${window.location.origin || 'https://apostai-sistema.vercel.app'}/sucesso`,
+        failure: `${window.location.origin || 'https://apostai-sistema.vercel.app'}/falha`,
+        pending: `${window.location.origin || 'https://apostai-sistema.vercel.app'}/pendente`
+      },
       external_reference: orderId,
-      notification_url: `${window.location.origin}/api/webhook/mercadopago`,
+      notification_url: `${window.location.origin || 'https://apostai-sistema.vercel.app'}/api/webhook/mercadopago`,
       payment_methods: {
         installments: 12, // Máximo 12 parcelas
         excluded_payment_types: [
@@ -105,6 +112,12 @@ export const createMercadoPagoPreference = async (
     };
 
     console.log('📋 Dados da preferência:', preference);
+    console.log('🔍 URLs de retorno:', {
+      success: preference.back_urls.success,
+      failure: preference.back_urls.failure,
+      pending: preference.back_urls.pending,
+      origin: window.location.origin
+    });
 
     const response = await fetch(`${MERCADOPAGO_CONFIG.baseUrl}/checkout/preferences`, {
       method: 'POST',
@@ -159,7 +172,6 @@ export const checkPaymentStatus = async (
 ): Promise<{ success: boolean; paid: boolean; status?: string }> => {
   try {
     console.log('🔍 Verificando status do pagamento:', { paymentId, orderId });
-    console.log('🔍 URL da verificação:', `${MERCADOPAGO_CONFIG.baseUrl}/v1/payments/${paymentId}`);
     
     const response = await fetch(`${MERCADOPAGO_CONFIG.baseUrl}/v1/payments/${paymentId}`, {
       method: 'GET',
@@ -245,16 +257,15 @@ export const createPixPayment = async (
   
   try {
     console.log('🔄 Criando preferência Checkout Pro para pagamento único...');
-    console.log('💰 Dados enviados para API PIX:', {
+    console.log('💰 Valores recebidos na função createPixPayment:', {
       planName,
       price,
       priceInReais: price / 100,
-      orderId,
       customerData
     });
     
-    // Chamar endpoint para criar preferência Checkout Pro
-    const response = await fetch('/api/create-pix-payment', {
+    // Tentar chamar endpoint para criar preferência Checkout Pro
+    const response = await fetch(`${window.location.origin}/api/create-pix-payment`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -272,7 +283,23 @@ export const createPixPayment = async (
     if (!response.ok) {
       const errorData = await response.text();
       console.error('❌ Erro na API Checkout Pro:', errorData);
-      throw new Error(`Erro na API Checkout Pro: ${response.status} - ${errorData}`);
+      
+      // Fallback: criar preferência diretamente
+      console.log('🔄 Usando fallback: criando preferência diretamente...');
+      return await createMercadoPagoPreference([{
+        name: planName,
+        price: price,
+        quantity: 1
+      }], orderId, customerData).then(result => {
+        if (result) {
+          return {
+            orderId,
+            paymentUrl: result.initPoint
+          };
+        } else {
+          throw new Error('Falha ao criar preferência de pagamento');
+        }
+      });
     }
 
     const data = await response.json();
@@ -289,7 +316,28 @@ export const createPixPayment = async (
 
   } catch (error) {
     console.error('❌ Erro ao criar preferência Checkout Pro:', error);
-    throw error;
+    
+    // Fallback: criar preferência diretamente
+    console.log('🔄 Usando fallback: criando preferência diretamente...');
+    try {
+      const result = await createMercadoPagoPreference([{
+        name: planName,
+        price: price,
+        quantity: 1
+      }], orderId, customerData);
+      
+      if (result) {
+        return {
+          orderId,
+          paymentUrl: result.initPoint
+        };
+      } else {
+        throw new Error('Falha ao criar preferência de pagamento');
+      }
+    } catch (fallbackError) {
+      console.error('❌ Erro no fallback:', fallbackError);
+      throw error; // Re-throw o erro original
+    }
   }
 };
 
@@ -303,16 +351,15 @@ export const createSubscriptionPayment = async (
   
   try {
     console.log('🔄 Criando preferência Checkout Pro para assinatura...');
-    console.log('💰 Dados enviados para API Assinatura:', {
+    console.log('💰 Valores recebidos na função createSubscriptionPayment:', {
       planName,
       price,
       priceInReais: price / 100,
-      orderId,
       customerData
     });
     
-    // Chamar endpoint para criar preferência Checkout Pro
-    const response = await fetch('/api/create-preference', {
+    // Tentar chamar endpoint para criar preferência Checkout Pro
+    const response = await fetch(`${window.location.origin}/api/create-preference`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -330,7 +377,23 @@ export const createSubscriptionPayment = async (
     if (!response.ok) {
       const errorData = await response.text();
       console.error('❌ Erro na API Checkout Pro:', errorData);
-      throw new Error(`Erro na API Checkout Pro: ${response.status} - ${errorData}`);
+      
+      // Fallback: criar preferência diretamente
+      console.log('🔄 Usando fallback: criando preferência diretamente...');
+      return await createMercadoPagoPreference([{
+        name: planName,
+        price: price,
+        quantity: 1
+      }], orderId, customerData).then(result => {
+        if (result) {
+          return {
+            orderId,
+            paymentUrl: result.initPoint
+          };
+        } else {
+          throw new Error('Falha ao criar preferência de pagamento');
+        }
+      });
     }
 
     const data = await response.json();
@@ -347,7 +410,28 @@ export const createSubscriptionPayment = async (
 
   } catch (error) {
     console.error('❌ Erro ao criar preferência Checkout Pro:', error);
-    throw error;
+    
+    // Fallback: criar preferência diretamente
+    console.log('🔄 Usando fallback: criando preferência diretamente...');
+    try {
+      const result = await createMercadoPagoPreference([{
+        name: planName,
+        price: price,
+        quantity: 1
+      }], orderId, customerData);
+      
+      if (result) {
+        return {
+          orderId,
+          paymentUrl: result.initPoint
+        };
+      } else {
+        throw new Error('Falha ao criar preferência de pagamento');
+      }
+    } catch (fallbackError) {
+      console.error('❌ Erro no fallback:', fallbackError);
+      throw error; // Re-throw o erro original
+    }
   }
 };
 
@@ -438,7 +522,7 @@ export const processMercadoPagoWebhook = async (webhookData: any): Promise<{
 };
 
 // Função para validar assinatura do webhook (segurança)
-export const validateWebhookSignature = (signature: string, body: string, secret: string = process.env.VITE_MERCADOPAGO_WEBHOOK_SECRET || 'a31984476039e38c886fc7a688a830d3bb52817b2ab5d8fce68866e1d899e98f'): boolean => {
+export const validateWebhookSignature = (signature: string, body: string, secret: string = import.meta.env.VITE_MERCADOPAGO_WEBHOOK_SECRET || 'a31984476039e38c886fc7a688a830d3bb52817b2ab5d8fce68866e1d899e98f'): boolean => {
   try {
     // Em ambiente de produção, isso seria feito no backend
     // Esta função é apenas para referência

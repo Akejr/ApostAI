@@ -22,7 +22,7 @@ module.exports = async function handler(req, res) {
     const accessToken = process.env.MERCADOPAGO_ACCESS_TOKEN || 'APP_USR-4948508052320612-090417-52cf3c977b061c03b25a0bbd84920dd3-1423321368';
 
     console.log('🔄 Criando preferência Checkout Pro para assinatura:', { planName, price, orderId });
-    console.log('💰 Valores recebidos no endpoint Assinatura:', {
+    console.log('💰 Valores recebidos na API create-preference:', {
       planName,
       price,
       priceInReais: price / 100,
@@ -31,13 +31,20 @@ module.exports = async function handler(req, res) {
     });
 
     // Criar preferência para Checkout Pro (assinatura)
+    const unitPrice = price / 100; // Converter centavos para reais
+    console.log('💰 Conversão de preço na API create-preference:', {
+      planName,
+      priceInCents: price,
+      priceInReais: unitPrice
+    });
+    
     const preferenceData = {
       items: [
         {
           title: `${planName} - ApostAI`,
           description: 'Apostas de futebol inteligentes - Assinatura mensal',
           quantity: 1,
-          unit_price: price / 100, // Converter centavos para reais
+          unit_price: unitPrice,
           currency_id: 'BRL'
         }
       ],
@@ -55,9 +62,9 @@ module.exports = async function handler(req, res) {
         installments: 12 // Permitir até 12 parcelas
       },
       back_urls: {
-        success: `${req.headers.origin || 'https://apostai-sistema.vercel.app'}/sucesso`,
-        failure: `${req.headers.origin || 'https://apostai-sistema.vercel.app'}/falha`,
-        pending: `${req.headers.origin || 'https://apostai-sistema.vercel.app'}/pendente`
+        success: `${req.headers.origin || 'http://localhost:5173'}/sucesso`,
+        failure: `${req.headers.origin || 'http://localhost:5173'}/falha`,
+        pending: `${req.headers.origin || 'http://localhost:5173'}/pendente`
       },
       auto_return: 'approved',
       external_reference: orderId,

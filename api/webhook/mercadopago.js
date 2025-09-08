@@ -29,15 +29,8 @@ function validateWebhookSignature(body, signature, secret) {
 }
 
 module.exports = async function handler(req, res) {
-  console.log('🔔 Webhook Mercado Pago recebido:', {
-    method: req.method,
-    headers: req.headers,
-    body: req.body
-  });
-
   // Permitir apenas POST
   if (req.method !== 'POST') {
-    console.log('❌ Método não permitido:', req.method);
     return res.status(405).json({ error: 'Method not allowed' });
   }
 

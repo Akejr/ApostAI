@@ -400,10 +400,16 @@ function App() {
     
     // Estados para o checkout
     const [checkoutCouponCode, setCheckoutCouponCode] = useState('');
-    const [checkoutCouponDiscount, setCheckoutCouponDiscount] = useState(0);
     const [showCheckoutNotification, setShowCheckoutNotification] = useState(false);
     const [checkoutNotificationMessage, setCheckoutNotificationMessage] = useState('');
     const [checkoutNotificationType, setCheckoutNotificationType] = useState<'success' | 'error'>('success');
+    
+    // Estado para cupom aplicado (SISTEMA UNIFICADO) - LOCAL para checkout
+    const [appliedCoupon, setAppliedCoupon] = useState<{
+      code: string;
+      name: string;
+      discount_percentage: number;
+    } | null>(null);
     
     // Função para mostrar notificações personalizadas
     const showCheckoutNotificationMessage = (message: string, type: 'success' | 'error' = 'success') => {
@@ -413,7 +419,7 @@ function App() {
       setTimeout(() => setShowCheckoutNotification(false), 4000);
     };
     
-    // Função para aplicar cupom no checkout
+    // Função para aplicar cupom no checkout (SISTEMA UNIFICADO)
     const applyCheckoutCoupon = async (code: string) => {
       if (!code.trim()) {
         showCheckoutNotificationMessage('Digite um código de cupom!', 'error');
@@ -421,7 +427,7 @@ function App() {
       }
 
       try {
-        console.log('🔍 Buscando cupom:', code.toUpperCase());
+        console.log('🔍 Buscando cupom no checkout:', code.toUpperCase());
         
         const { data, error } = await supabase
           .from('coupons')
@@ -430,27 +436,41 @@ function App() {
           .eq('is_active', true)
           .single();
 
-        console.log('📊 Resultado da busca:', { data, error });
+        console.log('📊 Resultado da busca no checkout:', { data, error });
 
         if (error || !data) {
           showCheckoutNotificationMessage('Cupom inválido ou inativo!', 'error');
           return false;
         }
 
-        setCheckoutCouponDiscount(data.discount_percentage);
+        // Aplicar cupom usando sistema unificado
+        setAppliedCoupon({
+          code: data.code,
+          name: data.name,
+          discount_percentage: data.discount_percentage
+        });
+        
         showCheckoutNotificationMessage(`✅ Cupom aplicado! ${data.discount_percentage}% de desconto`, 'success');
-        console.log(`✅ Cupom aplicado: ${data.name} - ${data.discount_percentage}% de desconto`);
+        console.log(`✅ Cupom aplicado no checkout: ${data.name} - ${data.discount_percentage}% de desconto`);
         return true;
       } catch (error) {
-        console.error('❌ Erro ao aplicar cupom:', error);
+        console.error('❌ Erro ao aplicar cupom no checkout:', error);
         showCheckoutNotificationMessage('Erro ao aplicar cupom!', 'error');
         return false;
       }
     };
     
-    // Calcular valores
-    const discountAmount = (planData.price * checkoutCouponDiscount / 100);
+    // Calcular valores usando sistema unificado
+    const discountAmount = appliedCoupon ? (planData.price * appliedCoupon.discount_percentage / 100) : 0;
     const finalPrice = planData.price - discountAmount;
+    
+    console.log('💰 Checkout - Valores calculados:', {
+      planData,
+      appliedCoupon,
+      discountAmount,
+      finalPrice,
+      finalPriceInReais: finalPrice / 100
+    });
     
     return (
       <div className="min-h-screen bg-black text-white relative overflow-hidden">
@@ -611,10 +631,10 @@ function App() {
                   </button>
                 </div>
                 
-                {checkoutCouponDiscount > 0 && (
+                {appliedCoupon && (
                   <div className="mt-3 flex items-center gap-2 text-green-400">
                     <CheckCircle className="w-4 h-4" />
-                    <span className="text-sm">Cupom aplicado! {checkoutCouponDiscount}% de desconto</span>
+                    <span className="text-sm">Cupom aplicado! {appliedCoupon.discount_percentage}% de desconto</span>
                   </div>
                 )}
                 
@@ -638,7 +658,7 @@ function App() {
                   
                   <div className="flex justify-between items-center p-3 lg:p-4 bg-green-500/10 rounded-xl lg:rounded-2xl">
                     <span className="text-green-400 font-medium text-sm lg:text-base">
-                      Desconto {checkoutCouponDiscount > 0 ? `(${checkoutCouponDiscount}%)` : ''}
+                      Desconto {appliedCoupon ? `(${appliedCoupon.discount_percentage}%)` : ''}
                     </span>
                     <span className="text-green-400 font-bold text-base lg:text-lg">-R$ {(discountAmount / 100).toFixed(2)}</span>
                   </div>
@@ -657,11 +677,18 @@ function App() {
                 onClick={async () => {
                   try {
                     console.log('🔄 Iniciando pagamento do checkout...');
-                    const { orderId, paymentUrl } = await createPlanPayment(planData.name, planData.price);
+                    console.log('💰 Enviando preço com desconto:', {
+                      originalPrice: planData.price,
+                      finalPrice: finalPrice,
+                      discountApplied: appliedCoupon ? `${appliedCoupon.discount_percentage}%` : 'Nenhum'
+                    });
+                    const { orderId, paymentUrl } = await createPlanPayment(planData.name, finalPrice);
                     localStorage.setItem('currentOrder', JSON.stringify({
                       orderId,
                       planName: planData.name,
-                      planPrice: planData.price,
+                      planPrice: finalPrice,
+                      originalPrice: planData.price,
+                      discountApplied: appliedCoupon,
                       timestamp: Date.now()
                     }));
                     console.log('🔗 URL de pagamento gerada:', paymentUrl);
@@ -768,25 +795,12 @@ function App() {
   const [showCheckout, setShowCheckout] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<{name: string, price: number, originalPrice?: number} | null>(null);
   const [selectedPaymentMethod, setSelectedPaymentMethod] = useState<'pix' | 'subscription' | null>(null);
-  const [couponCode, setCouponCode] = useState('');
-  const [couponDiscount, setCouponDiscount] = useState(0);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  
+  // Estados para cupom (SISTEMA UNIFICADO)
+  const [couponCode, setCouponCode] = useState('');
 
-  // Monitor mudanças no couponDiscount
-  useEffect(() => {
-    console.log('🔄 couponDiscount mudou para:', couponDiscount);
-    if (selectedPlan) {
-      const discountAmount = (selectedPlan.price * couponDiscount / 100);
-      const finalPrice = selectedPlan.price - discountAmount;
-      console.log('💰 Recalculando com novo desconto:', {
-        originalPrice: selectedPlan.price,
-        discount: couponDiscount,
-        finalPrice: finalPrice,
-        finalPriceInReais: finalPrice / 100,
-        selectedPlan: selectedPlan
-      });
-    }
-  }, [couponDiscount, selectedPlan]);
+  // Monitor mudanças no cupom aplicado - movido para escopo do checkout
   
   // Estados para autenticação de usuários
   const [isUserLoggedIn, setIsUserLoggedIn] = useState(() => {
@@ -909,26 +923,18 @@ function App() {
         return false;
       }
 
-      // Aplicar desconto do cupom
-      console.log('💰 Aplicando desconto:', data.discount_percentage + '%');
-      console.log('🔄 Estado anterior couponDiscount:', couponDiscount);
+      // Aplicar cupom usando sistema unificado
+      console.log('💰 Aplicando cupom:', {
+        code: data.code,
+        name: data.name,
+        discount: data.discount_percentage + '%'
+      });
       
-      setCouponDiscount(data.discount_percentage);
-      
-      // Verificar se o estado foi atualizado
-      setTimeout(() => {
-        console.log('🔄 Estado após setCouponDiscount:', couponDiscount);
-        if (selectedPlan) {
-          const newDiscountAmount = (selectedPlan.price * data.discount_percentage / 100);
-          const newFinalPrice = selectedPlan.price - newDiscountAmount;
-          console.log('💰 Novo cálculo após cupom:', {
-            originalPrice: selectedPlan.price,
-            newDiscount: data.discount_percentage,
-            newFinalPrice: newFinalPrice,
-            newFinalPriceInReais: newFinalPrice / 100
-          });
-        }
-      }, 100);
+      setAppliedCoupon({
+        code: data.code,
+        name: data.name,
+        discount_percentage: data.discount_percentage
+      });
       
       console.log(`✅ Cupom aplicado: ${data.name} - ${data.discount_percentage}% de desconto`);
       return true;
@@ -945,15 +951,31 @@ function App() {
         planName,
         finalPrice,
         finalPriceInReais: finalPrice / 100,
-        couponDiscount,
+        appliedCoupon: appliedCoupon,
         originalPrice: selectedPlan?.price,
         originalPriceInReais: selectedPlan?.price ? selectedPlan.price / 100 : 0
       });
+      
+      // Verificar se o valor com desconto está correto
+      if (appliedCoupon) {
+        const expectedDiscount = (selectedPlan?.price || 0) * appliedCoupon.discount_percentage / 100;
+        const expectedFinalPrice = (selectedPlan?.price || 0) - expectedDiscount;
+        console.log('🔍 Verificação do desconto:', {
+          originalPrice: selectedPlan?.price,
+          discountPercentage: appliedCoupon.discount_percentage,
+          expectedDiscount: expectedDiscount,
+          expectedFinalPrice: expectedFinalPrice,
+          receivedFinalPrice: finalPrice,
+          isCorrect: Math.abs(finalPrice - expectedFinalPrice) < 1 // Tolerância de 1 centavo
+        });
+      }
       
       if (!selectedPaymentMethod) {
         alert('Por favor, selecione uma forma de pagamento.');
         return;
       }
+      
+      console.log('💳 Método de pagamento selecionado:', selectedPaymentMethod);
       
       let paymentResult;
       
@@ -963,6 +985,12 @@ function App() {
       } else {
         console.log('🔄 Criando assinatura...');
         paymentResult = await createSubscriptionPayment(planName, finalPrice);
+      }
+      
+      console.log('📋 Resultado do pagamento:', paymentResult);
+      
+      if (!paymentResult || !paymentResult.paymentUrl) {
+        throw new Error('Falha ao gerar URL de pagamento');
       }
       
       const { orderId, paymentUrl } = paymentResult;
@@ -980,10 +1008,16 @@ function App() {
       console.log('📦 Dados do pedido salvos:', { orderId, planName, finalPrice, selectedPaymentMethod });
       
       // Abrir checkout do Mercado Pago
+      console.log('🚀 Abrindo checkout do Mercado Pago...');
       openCheckout(paymentUrl);
     } catch (error) {
       console.error('❌ Erro ao criar pagamento:', error);
-      alert('Erro ao processar pagamento. Tente novamente.');
+      console.error('❌ Detalhes do erro:', {
+        message: error.message,
+        stack: error.stack,
+        name: error.name
+      });
+      alert(`Erro ao processar pagamento: ${error.message}. Tente novamente.`);
     }
   };
 
@@ -4289,20 +4323,49 @@ function App() {
 
   // Página de Checkout (modal interno)
   if (showCheckout && selectedPlan) {
-    const discountAmount = (selectedPlan.price * couponDiscount / 100);
+    // Log crítico para verificar o estado do cupom
+    console.log('🚨 ESTADO DO CUPOM NO CHECKOUT:', {
+      appliedCoupon: appliedCoupon,
+      selectedPlan: selectedPlan,
+      showCheckout: showCheckout
+    });
+    
+    const discountAmount = appliedCoupon ? (selectedPlan.price * appliedCoupon.discount_percentage / 100) : 0;
     const finalPrice = selectedPlan.price - discountAmount;
     
     // Debug dos valores
     console.log('💰 Checkout - Valores:', {
       planPrice: selectedPlan.price,
-      couponDiscount: couponDiscount,
+      appliedCoupon: appliedCoupon,
       discountAmount: discountAmount,
       finalPrice: finalPrice,
       planPriceInReais: selectedPlan.price / 100,
       discountAmountInReais: discountAmount / 100,
       finalPriceInReais: finalPrice / 100,
-      calculation: `${selectedPlan.price} - (${selectedPlan.price} * ${couponDiscount} / 100) = ${finalPrice}`
+      calculation: appliedCoupon ? `${selectedPlan.price} - (${selectedPlan.price} * ${appliedCoupon.discount_percentage} / 100) = ${finalPrice}` : `${selectedPlan.price} - 0 = ${finalPrice}`
     });
+    
+    // Log específico para debug do desconto
+    console.log('🔍 DEBUG DESCONTO:', {
+      selectedPlanName: selectedPlan.name,
+      selectedPlanPrice: selectedPlan.price,
+      appliedCoupon: appliedCoupon,
+      calculatedDiscount: discountAmount,
+      finalPriceWithDiscount: finalPrice,
+      roundedFinalPrice: Math.round(finalPrice),
+      isDiscountApplied: !!appliedCoupon,
+      expectedPriceWithDiscount: appliedCoupon ? selectedPlan.price - (selectedPlan.price * appliedCoupon.discount_percentage / 100) : selectedPlan.price
+    });
+    
+    // Log crítico para verificar se o desconto está sendo aplicado
+    if (appliedCoupon) {
+      console.log('🚨 ALERTA: Desconto aplicado mas valor pode estar incorreto!', {
+        originalPrice: selectedPlan.price,
+        discountPercentage: appliedCoupon.discount_percentage,
+        finalPrice: finalPrice,
+        shouldBe: selectedPlan.price - (selectedPlan.price * appliedCoupon.discount_percentage / 100)
+      });
+    }
     
     return (
       <div className="min-h-screen bg-gradient-to-br from-black via-gray-900 to-black text-white">
@@ -4427,10 +4490,10 @@ function App() {
                   </button>
                 </div>
                 
-                {couponDiscount > 0 && (
+                {appliedCoupon && (
                   <div className="mt-3 flex items-center gap-2 text-green-400">
                     <CheckCircle className="w-4 h-4" />
-                    <span className="text-sm">Cupom aplicado! {couponDiscount}% de desconto</span>
+                    <span className="text-sm">Cupom aplicado! {appliedCoupon.discount_percentage}% de desconto</span>
                   </div>
                 )}
               </div>
@@ -4446,7 +4509,7 @@ function App() {
                   </div>
                   
                   <div className="flex justify-between text-green-400">
-                    <span>Desconto {couponDiscount > 0 ? `(${couponDiscount}%)` : ''}</span>
+                    <span>Desconto {appliedCoupon ? `(${appliedCoupon.discount_percentage}%)` : ''}</span>
                     <span>-R$ {(discountAmount / 100).toFixed(2)}</span>
                   </div>
                   
@@ -4470,16 +4533,14 @@ function App() {
               {/* Botão de Confirmação */}
               <button
                 onClick={async () => {
-                  const roundedFinalPrice = Math.round(finalPrice);
-                  console.log('🎯 Botão clicado - Valores finais:', {
-                    originalPrice: selectedPlan.price,
-                    couponDiscount: couponDiscount,
-                    discountAmount: discountAmount,
+                  console.log('🔍 Valores antes de chamar handlePlanPayment:', {
+                    planName: selectedPlan.name,
                     finalPrice: finalPrice,
-                    roundedFinalPrice: roundedFinalPrice,
-                    finalPriceInReais: roundedFinalPrice / 100
+                    roundedFinalPrice: Math.round(finalPrice),
+                    appliedCoupon: appliedCoupon,
+                    originalPrice: selectedPlan.price
                   });
-                  await handlePlanPayment(selectedPlan.name, roundedFinalPrice);
+                  await handlePlanPayment(selectedPlan.name, Math.round(finalPrice));
                 }}
                 className="w-full bg-gradient-to-r from-[#FF3002] to-[#E02702] hover:from-[#E02702] hover:to-[#C01F02] text-white py-4 rounded-xl font-bold text-lg transition-all duration-300 hover:shadow-2xl hover:shadow-[#FF3002]/30 transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
                 disabled={!selectedPaymentMethod}
