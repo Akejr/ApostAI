@@ -1,4 +1,4 @@
-const mercadopago = require('mercadopago');
+import mercadopago from 'mercadopago';
 
 // Configurar Mercado Pago
 mercadopago.configure({

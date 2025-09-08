@@ -551,9 +551,13 @@ export const checkPaymentAndRedirect = async (orderId: string) => {
     }
     
     const orderData = JSON.parse(currentOrder);
+    console.log('📋 Dados do pedido:', orderData);
     
     // Fazer requisição para verificar status do pagamento
-    const response = await fetch(`${window.location.origin}/api/check-payment-status`, {
+    const apiUrl = `${window.location.origin}/api/check-payment-status`;
+    console.log('🌐 Fazendo requisição para:', apiUrl);
+    
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -564,6 +568,8 @@ export const checkPaymentAndRedirect = async (orderId: string) => {
       })
     });
     
+    console.log('📡 Resposta da API:', response.status, response.statusText);
+    
     if (response.ok) {
       const result = await response.json();
       console.log('📊 Status do pagamento:', result);
@@ -573,7 +579,12 @@ export const checkPaymentAndRedirect = async (orderId: string) => {
         // Redirecionar para página de sucesso
         window.location.href = `${window.location.origin}/sucesso?payment_id=${result.paymentId}&status=approved&external_reference=${orderId}`;
         return true;
+      } else {
+        console.log('⏳ Pagamento ainda não aprovado. Status:', result.status);
       }
+    } else {
+      const errorText = await response.text();
+      console.log('❌ Erro na API:', response.status, errorText);
     }
     
     return false;
@@ -584,8 +595,10 @@ export const checkPaymentAndRedirect = async (orderId: string) => {
 };
 
 // Função para iniciar verificação periódica do pagamento
-export const startPaymentPolling = (orderId: string, maxAttempts: number = 60) => {
+export const startPaymentPolling = (orderId: string, maxAttempts: number = 120) => {
   let attempts = 0;
+  
+  console.log('🚀 Iniciando verificação automática do pagamento...', orderId);
   
   const pollPayment = async () => {
     attempts++;
@@ -599,13 +612,15 @@ export const startPaymentPolling = (orderId: string, maxAttempts: number = 60) =
     }
     
     if (attempts < maxAttempts) {
-      // Verificar novamente em 10 segundos
-      setTimeout(pollPayment, 10000);
+      // Verificar novamente em 5 segundos (mais frequente)
+      console.log('⏳ Aguardando 5 segundos para próxima verificação...');
+      setTimeout(pollPayment, 5000);
     } else {
-      console.log('⏰ Timeout: Parando verificação automática do pagamento');
+      console.log('⏰ Timeout: Parando verificação automática do pagamento após', maxAttempts, 'tentativas');
     }
   };
   
-  // Iniciar verificação após 5 segundos
-  setTimeout(pollPayment, 5000);
+  // Iniciar verificação após 3 segundos
+  console.log('⏰ Iniciando verificação em 3 segundos...');
+  setTimeout(pollPayment, 3000);
 };

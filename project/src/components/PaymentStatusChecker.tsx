@@ -14,9 +14,12 @@ const PaymentStatusChecker: React.FC<PaymentStatusCheckerProps> = ({ orderId, on
     setIsChecking(true);
     
     try {
-      console.log('🔍 Verificando status do pagamento...', orderId);
+      console.log('🔍 [MANUAL] Verificando status do pagamento...', orderId);
       
-      const response = await fetch(`${window.location.origin}/api/check-payment-status`, {
+      const apiUrl = `${window.location.origin}/api/check-payment-status`;
+      console.log('🌐 [MANUAL] Fazendo requisição para:', apiUrl);
+      
+      const response = await fetch(apiUrl, {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
@@ -27,20 +30,27 @@ const PaymentStatusChecker: React.FC<PaymentStatusCheckerProps> = ({ orderId, on
         })
       });
       
+      console.log('📡 [MANUAL] Resposta da API:', response.status, response.statusText);
+      
       if (response.ok) {
         const result = await response.json();
-        console.log('📊 Status do pagamento:', result);
+        console.log('📊 [MANUAL] Status do pagamento:', result);
         
         if (result.status === 'approved' || result.status === 'completed') {
-          console.log('✅ Pagamento aprovado! Redirecionando...');
+          console.log('✅ [MANUAL] Pagamento aprovado! Redirecionando...');
           onPaymentConfirmed();
           return;
+        } else {
+          console.log('⏳ [MANUAL] Pagamento ainda não aprovado. Status:', result.status);
         }
+      } else {
+        const errorText = await response.text();
+        console.log('❌ [MANUAL] Erro na API:', response.status, errorText);
       }
       
       setLastCheck(new Date());
     } catch (error) {
-      console.error('❌ Erro ao verificar pagamento:', error);
+      console.error('❌ [MANUAL] Erro ao verificar pagamento:', error);
     } finally {
       setIsChecking(false);
     }
