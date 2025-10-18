@@ -1,0 +1,201 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* Fallback styles em caso de problemas com Tailwind */
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 0;
+  font-family: Inter, system-ui, sans-serif;
+  background-color: #000000;
+  color: #ffffff;
+  overflow-x: hidden;
+}
+
+#root {
+  background-color: #000000;
+}
+
+html {
+  overflow-x: hidden;
+}
+
+/* Garantir que o conteúdo seja visível */
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+/* Estilos básicos de botão */
+button {
+  cursor: pointer;
+  border: none;
+  border-radius: 0.5rem;
+  padding: 0.5rem 1rem;
+  font-weight: 600;
+  transition: all 0.3s ease;
+}
+
+input {
+  border: 1px solid #374151;
+  border-radius: 0.75rem;
+  padding: 1rem;
+  background-color: #1a1a1a;
+  color: #ffffff;
+}
+
+input:focus {
+  outline: none;
+  border-color: #FF3002;
+}
+
+/* Animações personalizadas */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateX(20px) scale(0.95);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0) scale(1);
+  }
+}
+
+/* Animações super suaves */
+@keyframes gentleFloat {
+  0%, 100% {
+    transform: translateY(0px) scale(1);
+  }
+  25% {
+    transform: translateY(-5px) scale(1.002);
+  }
+  50% {
+    transform: translateY(-8px) scale(1.005);
+  }
+  75% {
+    transform: translateY(-3px) scale(1.002);
+  }
+}
+
+@keyframes softBreathe {
+  0%, 100% {
+    opacity: 0.85;
+  }
+  50% {
+    opacity: 0.95;
+  }
+}
+
+@keyframes smoothShimmer {
+  0% {
+    transform: translateX(-100%) skewX(-5deg);
+    opacity: 0;
+  }
+  50% {
+    opacity: 0.3;
+  }
+  100% {
+    transform: translateX(200%) skewX(-5deg);
+    opacity: 0;
+  }
+}
+
+@keyframes chartWave {
+  0%, 100% {
+    transform: scaleY(1);
+  }
+  50% {
+    transform: scaleY(0.8);
+  }
+}
+
+@keyframes chartPulse {
+  0%, 100% {
+    opacity: 0.9;
+  }
+  50% {
+    opacity: 1;
+  }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.5s ease-out;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.6s ease-out;
+}
+
+.animate-gentle-float {
+  animation: gentleFloat 12s ease-in-out infinite;
+}
+
+.animate-soft-breathe {
+  animation: softBreathe 6s ease-in-out infinite;
+}
+
+.animate-smooth-shimmer {
+  animation: smoothShimmer 4s ease-in-out infinite;
+}
+
+.animate-chart-wave {
+  animation: chartWave 4s ease-in-out infinite;
+  transform-origin: bottom;
+}
+
+.animate-chart-pulse {
+  animation: chartPulse 3s ease-in-out infinite;
+}
+
+@keyframes fadeInUp {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* Scroll personalizado para os resultados da pesquisa */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 8px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 10px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: linear-gradient(180deg, #FF3002, #FF6B47);
+  border-radius: 10px;
+  border: 2px solid rgba(0, 0, 0, 0.2);
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: linear-gradient(180deg, #E02702, #FF3002);
+}
+
+/* Fallback para Firefox */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: #FF3002 rgba(255, 255, 255, 0.05);
+}
