@@ -17,9 +17,9 @@ const PaymentMethodSelector: React.FC<PaymentMethodSelectorProps> = ({
   const [isExpanded, setIsExpanded] = useState(false);
 
   const formatPrice = (priceInCents: number) => {
-    return (priceInCents / 100).toLocaleString('pt-BR', {
+    return (priceInCents / 100).toLocaleString('pt-PT', {
       style: 'currency',
-      currency: 'BRL'
+      currency: 'EUR'
     });
   };
 

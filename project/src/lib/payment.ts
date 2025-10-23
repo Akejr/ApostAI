@@ -75,7 +75,7 @@ export const createMercadoPagoPreference = async (
     
     const preference: MercadoPagoPreference = {
       items: items.map(item => {
-        const unitPrice = item.price / 100; // Converter centavos para reais
+        const unitPrice = item.price / 100; // Converter centavos para euros
         console.log('💰 Conversão de preço no item:', {
           itemName: item.name,
           priceInCents: item.price,
@@ -89,7 +89,7 @@ export const createMercadoPagoPreference = async (
           description: `Plano ${item.name} - ${MERCADOPAGO_CONFIG.companyName}`,
           quantity: item.quantity,
           unit_price: unitPrice,
-          currency_id: 'BRL'
+          currency_id: 'EUR'
         };
       }),
       payer: {

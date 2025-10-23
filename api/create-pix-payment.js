@@ -31,7 +31,7 @@ module.exports = async function handler(req, res) {
     });
 
     // Criar preferência para Checkout Pro (pagamento único)
-    const unitPrice = price / 100; // Converter centavos para reais
+    const unitPrice = price / 100; // Converter centavos para euros
     console.log('💰 Conversão de preço na API create-pix-payment:', {
       planName,
       priceInCents: price,
@@ -45,7 +45,7 @@ module.exports = async function handler(req, res) {
           description: 'Apostas de futebol inteligentes - Pagamento mensal único',
           quantity: 1,
           unit_price: unitPrice,
-          currency_id: 'BRL'
+          currency_id: 'EUR'
         }
       ],
       payer: {

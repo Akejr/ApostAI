@@ -576,7 +576,7 @@ const Admin: React.FC = () => {
     const couponUsers = users.filter(user => user.couponCode === couponCode);
     
     return couponUsers.map(user => {
-      const planPrice = user.plan === 'Básico' ? 35 : user.plan === 'Pro' ? 45 : 99;
+      const planPrice = user.plan === 'Básico' ? 5 : user.plan === 'Pro' ? 7 : 12;
       const profitAmount = (planPrice * (coupons.find(c => c.code === couponCode)?.profitPercentage || 0)) / 100;
       
       return {
@@ -1113,9 +1113,9 @@ const Admin: React.FC = () => {
                   onChange={(e) => setNewUserPlan(e.target.value as 'Básico' | 'Pro' | 'Premium')}
                   className="w-full bg-black/60 border border-white/20 rounded-xl px-4 py-3 text-white focus:outline-none focus:border-[#FF3002] transition-colors"
                 >
-                  <option value="Básico">Básico - R$ 35/mês</option>
-                  <option value="Pro">Pro - R$ 45/mês</option>
-                  <option value="Premium">Premium - R$ 99/mês</option>
+                  <option value="Básico">Básico - € 5/mês</option>
+                  <option value="Pro">Pro - € 7/mês</option>
+                  <option value="Premium">Premium - € 12/mês</option>
                 </select>
               </div>
 
