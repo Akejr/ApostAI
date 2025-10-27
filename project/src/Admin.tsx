@@ -761,16 +761,16 @@ const Admin: React.FC = () => {
              </div>
 
             <div className="bg-black/40 backdrop-blur-xl rounded-2xl p-8 border border-white/10 hover:border-[#FF3002]/30 transition-all duration-300">
-               <div className="flex items-center justify-between">
-                 <div>
+              <div className="flex items-center justify-between">
+                <div>
                   <p className="text-gray-400 text-sm mb-2">Análises Realizadas</p>
-                   <p className="text-3xl font-bold text-white">{dashboardStats.totalAnalyses}</p>
-                 </div>
+                  <p className="text-3xl font-bold text-white">{dashboardStats.totalAnalyses}</p>
+                </div>
                 <div className="bg-purple-500/20 p-4 rounded-xl">
                   <BarChart3 className="w-7 h-7 text-purple-400" />
-                 </div>
-               </div>
-             </div>
+                </div>
+              </div>
+            </div>
            </div>
 
           {/* Abas */}

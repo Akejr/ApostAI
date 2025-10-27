@@ -6466,22 +6466,7 @@ function App() {
         </section>
       )}
 
-      {/* Quadro de Promoção */}
-      <div className="container mx-auto px-4 sm:px-6 lg:px-8 mb-6">
-        <div className="bg-gradient-to-r from-green-500/20 to-emerald-600/20 border border-green-400/40 rounded-2xl p-6 sm:p-8 text-center">
-          <p className="text-white text-2xl sm:text-3xl font-bold">
-            Promoção por tempo limitado: todos os planos por <span className="text-[#FF3002]">R$ 10/mês</span>
-          </p>
-          <p className="text-gray-300 mt-2">
-            Básico era R$ 35 • Pro era R$ 45 • Premium era R$ 75
-          </p>
-          <button 
-            onClick={() => scrollToSection('planos')} 
-            className="mt-4 bg-[#FF3002] hover:bg-[#E02702] text-white px-6 py-3 rounded-xl font-bold transition-all">
-            Aproveitar promoção
-          </button>
-        </div>
-      </div>
+      
 
       {/* Footer - Presente em todas as telas */}
       <footer className="border-t border-gray-800 py-4 sm:py-6 mt-auto">
