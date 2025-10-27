@@ -380,12 +380,12 @@ function App() {
     const getHotmartLink = (plan: string) => {
       const p = plan.toLowerCase();
       if (p.includes('básico') || p.includes('basico') || p.includes('basic')) {
-        return 'https://pay.hotmart.com/A102075268K?off=x3yc4nnu';
+        return 'https://pay.hotmart.com/A102075268K?off=90oayl4p';
       }
       if (p.includes('premium')) {
-        return 'https://pay.hotmart.com/O102075592R?off=413shoa5';
+        return 'https://pay.hotmart.com/O102075592R?off=kirw85pm';
       }
-      return 'https://pay.hotmart.com/C102075545K?off=y1uignt1'; // padrão: Pro
+      return 'https://pay.hotmart.com/C102075545K?off=72qtduc2'; // padrão: Pro
     };
     
     // Estados para o checkout
@@ -612,21 +612,24 @@ function App() {
                 <div className="space-y-3 lg:space-y-4">
                   <div className="flex justify-between items-center p-3 lg:p-4 bg-white/5 rounded-xl lg:rounded-2xl">
                     <span className="text-white font-medium text-sm lg:text-base">{planData.name}</span>
-                    <span className="text-white font-bold text-base lg:text-lg">€ {(planData.price / 100).toFixed(2)}</span>
+                    <span className="text-white font-bold text-base lg:text-lg">
+                      <span className="text-white/60 line-through mr-2">R$ {(planData.name === 'Plano Básico' ? 35 : planData.name === 'Plano Pro' ? 45 : 75).toFixed(2)}</span>
+                      R$ 10,00
+                    </span>
                   </div>
                   
                   <div className="flex justify-between items-center p-3 lg:p-4 bg-green-500/10 rounded-xl lg:rounded-2xl">
                     <span className="text-green-400 font-medium text-sm lg:text-base">
-                      Desconto {appliedCoupon ? `(${appliedCoupon.discount_percentage}%)` : ''}
+                      Desconto Promoção (tempo limitado)
                     </span>
-                    <span className="text-green-400 font-bold text-base lg:text-lg">-€ {(discountAmount / 100).toFixed(2)}</span>
+                    <span className="text-green-400 font-bold text-base lg:text-lg">-R$ {((planData.name === 'Plano Básico' ? 35 : planData.name === 'Plano Pro' ? 45 : 75) - 10).toFixed(2)}</span>
                   </div>
                   
                   <div className="h-px bg-gradient-to-r from-transparent via-white/20 to-transparent my-4 lg:my-6"></div>
                   
                   <div className="flex justify-between items-center p-4 lg:p-6 bg-gradient-to-r from-[#FF3002]/10 to-[#E02702]/10 rounded-xl lg:rounded-2xl border border-[#FF3002]/20">
                     <span className="text-white font-bold text-lg lg:text-xl">Total</span>
-                    <span className="text-[#FF3002] font-bold text-xl lg:text-2xl">€ {(finalPrice / 100).toFixed(2)}</span>
+                    <span className="text-[#FF3002] font-bold text-xl lg:text-2xl">R$ 10,00</span>
                   </div>
                 </div>
               </div>
@@ -4364,19 +4367,22 @@ function App() {
                 <div className="space-y-3">
                   <div className="flex justify-between text-white">
                     <span>{selectedPlan.name}</span>
-                    <span>€ {(selectedPlan.price / 100).toFixed(2)}</span>
+                    <span>
+                      <span className="text-white/60 line-through mr-2">R$ {(selectedPlan.name === 'Plano Básico' ? 35 : selectedPlan.name === 'Plano Pro' ? 45 : 75).toFixed(2)}</span>
+                      R$ 10,00
+                    </span>
                   </div>
                   
                   <div className="flex justify-between text-green-400">
                     <span>Desconto {appliedCoupon ? `(${appliedCoupon.discount_percentage}%)` : ''}</span>
-                    <span>-€ {(discountAmount / 100).toFixed(2)}</span>
+                    <span>-R$ {((selectedPlan.name === 'Plano Básico' ? 35 : selectedPlan.name === 'Plano Pro' ? 45 : 75) - 10).toFixed(2)}</span>
                   </div>
                   
                   <hr className="border-white/20" />
                   
                   <div className="flex justify-between text-xl font-bold text-[#FF3002]">
                     <span>Total</span>
-                    <span>€ {(finalPrice / 100).toFixed(2)}</span>
+                    <span>R$ 10,00</span>
                   </div>
                 </div>
               </div>
@@ -5598,7 +5604,8 @@ function App() {
                 <div className="text-center mb-8">
                   <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4">Plano Básico</h3>
                   <div className="mb-6">
-                    <span className="text-4xl sm:text-5xl font-bold text-[#FF3002]">€ 5</span>
+                    <span className="text-gray-400 text-lg line-through mr-3">R$ 35</span>
+                    <span className="text-4xl sm:text-5xl font-bold text-[#FF3002]">R$ 10</span>
                     <span className="text-gray-400 text-lg">/mês</span>
                   </div>
                   <div className="bg-gradient-to-r from-blue-500/20 to-purple-500/20 p-4 rounded-xl">
@@ -5656,7 +5663,8 @@ function App() {
                 <div className="text-center mb-8">
                   <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4">Plano Pro</h3>
                   <div className="mb-6">
-                    <span className="text-4xl sm:text-5xl font-bold text-[#FF3002]">€ 7</span>
+                    <span className="text-gray-400 text-lg line-through mr-3">R$ 45</span>
+                    <span className="text-4xl sm:text-5xl font-bold text-[#FF3002]">R$ 10</span>
                     <span className="text-gray-400 text-lg">/mês</span>
                   </div>
                   <div className="bg-gradient-to-r from-[#FF3002]/30 to-orange-500/30 p-4 rounded-xl">
@@ -5711,7 +5719,8 @@ function App() {
                 <div className="text-center mb-8">
                   <h3 className="text-2xl sm:text-3xl font-bold text-white mb-4">Plano Premium</h3>
                   <div className="mb-6">
-                    <span className="text-4xl sm:text-5xl font-bold text-[#FF3002]">€ 12</span>
+                    <span className="text-gray-400 text-lg line-through mr-3">R$ 75</span>
+                    <span className="text-4xl sm:text-5xl font-bold text-[#FF3002]">R$ 10</span>
                     <span className="text-gray-400 text-lg">/mês</span>
                   </div>
                   <div className="bg-gradient-to-r from-purple-500/20 to-pink-500/20 p-4 rounded-xl">
@@ -6456,6 +6465,23 @@ function App() {
           </div>
         </section>
       )}
+
+      {/* Quadro de Promoção */}
+      <div className="container mx-auto px-4 sm:px-6 lg:px-8 mb-6">
+        <div className="bg-gradient-to-r from-green-500/20 to-emerald-600/20 border border-green-400/40 rounded-2xl p-6 sm:p-8 text-center">
+          <p className="text-white text-2xl sm:text-3xl font-bold">
+            Promoção por tempo limitado: todos os planos por <span className="text-[#FF3002]">R$ 10/mês</span>
+          </p>
+          <p className="text-gray-300 mt-2">
+            Básico era R$ 35 • Pro era R$ 45 • Premium era R$ 75
+          </p>
+          <button 
+            onClick={() => scrollToSection('planos')} 
+            className="mt-4 bg-[#FF3002] hover:bg-[#E02702] text-white px-6 py-3 rounded-xl font-bold transition-all">
+            Aproveitar promoção
+          </button>
+        </div>
+      </div>
 
       {/* Footer - Presente em todas as telas */}
       <footer className="border-t border-gray-800 py-4 sm:py-6 mt-auto">
